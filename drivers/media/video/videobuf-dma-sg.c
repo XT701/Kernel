@@ -59,10 +59,9 @@ videobuf_vmalloc_to_sg(unsigned char *virt, int nr_pages)
 	struct page *pg;
 	int i;
 
-	sglist = vmalloc(nr_pages * sizeof(*sglist));
+	sglist = kcalloc(nr_pages, sizeof(struct scatterlist), GFP_KERNEL);
 	if (NULL == sglist)
 		return NULL;
-	memset(sglist, 0, nr_pages * sizeof(*sglist));
 	sg_init_table(sglist, nr_pages);
 	for (i = 0; i < nr_pages; i++, virt += PAGE_SIZE) {
 		pg = vmalloc_to_page(virt);
@@ -74,7 +73,7 @@ videobuf_vmalloc_to_sg(unsigned char *virt, int nr_pages)
 	return sglist;
 
  err:
-	vfree(sglist);
+	kfree(sglist);
 	return NULL;
 }
 
@@ -86,7 +85,7 @@ videobuf_pages_to_sg(struct page **pages, int nr_pages, int offset)
 
 	if (NULL == pages[0])
 		return NULL;
-	sglist = vmalloc(nr_pages * sizeof(*sglist));
+	sglist = kmalloc(nr_pages * sizeof(*sglist), GFP_KERNEL);
 	if (NULL == sglist)
 		return NULL;
 	sg_init_table(sglist, nr_pages);
@@ -106,12 +105,12 @@ videobuf_pages_to_sg(struct page **pages, int nr_pages, int offset)
 
  nopage:
 	dprintk(2,"sgl: oops - no page\n");
-	vfree(sglist);
+	kfree(sglist);
 	return NULL;
 
  highmem:
 	dprintk(2,"sgl: oops - highmem page\n");
-	vfree(sglist);
+	kfree(sglist);
 	return NULL;
 }
 
@@ -232,7 +231,7 @@ int videobuf_dma_map(struct videobuf_queue* q, struct videobuf_dmabuf *dma)
 						(dma->vmalloc,dma->nr_pages);
 	}
 	if (dma->bus_addr) {
-		dma->sglist = vmalloc(sizeof(*dma->sglist));
+		dma->sglist = kmalloc(sizeof(struct scatterlist), GFP_KERNEL);
 		if (NULL != dma->sglist) {
 			dma->sglen  = 1;
 			sg_dma_address(&dma->sglist[0]) = dma->bus_addr & PAGE_MASK;
@@ -250,10 +249,10 @@ int videobuf_dma_map(struct videobuf_queue* q, struct videobuf_dmabuf *dma)
 		if (0 == dma->sglen) {
 			printk(KERN_WARNING
 			       "%s: videobuf_map_sg failed\n",__func__);
-			vfree(dma->sglist);
+			kfree(dma->sglist);
 			dma->sglist = NULL;
 			dma->sglen = 0;
-			return -ENOMEM;
+			return -EIO;
 		}
 	}
 	return 0;
@@ -276,7 +275,7 @@ int videobuf_dma_unmap(struct videobuf_queue* q,struct videobuf_dmabuf *dma)
 
 	dma_unmap_sg(q->dev, dma->sglist, dma->nr_pages, dma->direction);
 
-	vfree(dma->sglist);
+	kfree(dma->sglist);
 	dma->sglist = NULL;
 	dma->sglen = 0;
 	return 0;
@@ -395,7 +394,7 @@ videobuf_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	return 0;
 }
 
-static const struct vm_operations_struct videobuf_vm_ops =
+static struct vm_operations_struct videobuf_vm_ops =
 {
 	.open     = videobuf_vm_open,
 	.close    = videobuf_vm_close,
