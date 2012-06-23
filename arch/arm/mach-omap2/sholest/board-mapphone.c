@@ -81,7 +81,7 @@
 #include <linux/adp5588_keypad.h>
 #endif
 
-#ifdef CONFIG_VIDEO_OMAP3
+#ifdef CONFIG_VIDEO_OLDOMAP3
 #include <media/v4l2-int-device.h>
 #if defined(CONFIG_VIDEO_MT9P012) || defined(CONFIG_VIDEO_MT9P012_MODULE)
 #include <media/mt9p012.h>
