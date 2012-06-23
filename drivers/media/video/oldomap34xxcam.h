@@ -241,16 +241,16 @@ struct cam_sensor_settings{
 	u32 flags;
 	u32 exposure;
 	u16 gain;
-        u16 fps;
 	u16 regs;
 	void *reg_data;
+	u16 fps;
 };
 
 #define	OMAP34XXCAM_SET_EXPOSURE		0x1
 #define	OMAP34XXCAM_SET_GAIN			         0x2
 #define	OMAP34XXCAM_READ_REGS			   0x4
 #define	OMAP34XXCAM_WRITE_REGS			   0x8
-#define	OMAP34XXCAM_SET_FPS                   0x10
+#define	OMAP34XXCAM_SET_FPS			   0x10
 
 #define	OMAP34XXCAM_REG_8BIT			         0x1
 #define	OMAP34XXCAM_REG_16BIT			      0x2

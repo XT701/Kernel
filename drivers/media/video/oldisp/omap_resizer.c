@@ -27,8 +27,8 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/io.h>
-#include <linux/sched.h>
 #include <linux/uaccess.h>
+#include <linux/sched.h>
 #include <media/v4l2-dev.h>
 #include <asm/cacheflush.h>
 
@@ -1148,7 +1148,7 @@ static int rsz_vbq_prepare(struct videobuf_queue *q,
 		spin_lock(&fh->vbq_lock);
 		vb->state = VIDEOBUF_PREPARED;
 		spin_unlock(&fh->vbq_lock);
-		flush_cache_user_range(NULL, vb->baddr, (vb->baddr
+		flush_cache_user_range(vb->baddr, (vb->baddr
 								+ vb->bsize));
 	} else
 		rsz_vbq_release(q, vb);

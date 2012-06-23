@@ -530,7 +530,7 @@ static int previewer_vbq_prepare(struct videobuf_queue *q,
 
 		if (!err) {
 			vb->state = VIDEOBUF_PREPARED;
-			flush_cache_user_range(NULL, vb->baddr, (vb->baddr +
+			flush_cache_user_range(vb->baddr, (vb->baddr +
 								vb->bsize));
 		} else {
 			previewer_vbq_release(q, vb);
@@ -577,7 +577,7 @@ static int previewer_vbq_prepare(struct videobuf_queue *q,
 
 		if (!err) {
 			vb->state = VIDEOBUF_PREPARED;
-			flush_cache_user_range(NULL, vb->baddr, (vb->baddr +
+			flush_cache_user_range(vb->baddr, (vb->baddr +
 								vb->bsize));
 		} else {
 			previewer_vbq_release(q, vb);

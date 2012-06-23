@@ -74,7 +74,7 @@
 #define NUM_ISP_CAPTURE_FORMATS 	(sizeof(isp_formats) /\
 							sizeof(isp_formats[0]))
 #define ISP_WORKAROUND 1
-#define ISP_BUFFER_MAX_SIZE (1024 * 1024 * 10)
+#define ISP_BUFFER_MAX_SIZE (1024 * 1024 * 16)
 #define ISP_BUFFER_MAX_PAGES (ISP_BUFFER_MAX_SIZE / ISPMMU_PAGE_SIZE)
 
 #define NR_PAGES(x, y)		((((y + x - 1) & PAGE_MASK) >> PAGE_SHIFT) - \
@@ -364,10 +364,13 @@ void __exit isp_hist_cleanup(void);
 void __exit isp_resizer_cleanup(void);
 void __exit isp_af_exit(void);
 
-struct page **map_user_memory_to_kernel(unsigned long addr, u32 size, u32 *nr_pages_mapped);
+struct page **map_user_memory_to_kernel(unsigned long addr, u32 size,
+		u32 *nr_pages_mapped);
 void unmap_user_memory_from_kernel(struct page **pages, int nr_pages);
 
 int isp_run_resizer(void *userdata);
 int isp_run_preview(void *userdata);
+
+int isp_lsc_workaround_enabled(void);
 
 #endif	/* OMAP_ISP_TOP_H */

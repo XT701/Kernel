@@ -68,7 +68,7 @@
  * to keep track of these 16 L2 page table's status.
  */
 #define L2P_TABLE_SIZE			1024
-#define L2P_TABLE_NR 			62 /* Currently supports 4*5MP shots */
+#define L2P_TABLE_NR 			80
 #define L2P_TABLES_SIZE 		(L2P_TABLE_SIZE * L2P_TABLE_NR)
 
 /* Extra memory allocated to get ttb aligned on 16KB */

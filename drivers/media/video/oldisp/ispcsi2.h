@@ -176,7 +176,7 @@ struct isp_csi2_cfg_update {
 	struct isp_csi2_timings_cfg_update timings[2];
 	struct isp_csi2_ctrl_cfg_update ctrl;
 };
-
+extern unsigned long ecc_counter;
 int isp_csi2_complexio_lanes_config(struct isp_csi2_lanes_cfg *reqcfg);
 int isp_csi2_complexio_lanes_update(bool force_update);
 int isp_csi2_complexio_lanes_count(int cnt);
@@ -232,6 +232,7 @@ void isp_csi2_isr(void);
 int isp_csi2_reset(void);
 void isp_csi2_enable(int enable);
 void isp_csi2_regdump(void);
+void isp_csia_isr(unsigned long status, void *arg1, void *arg2);
 
 #endif	/* OMAP_ISP_CSI2_H */
 

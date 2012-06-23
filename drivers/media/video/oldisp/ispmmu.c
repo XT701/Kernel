@@ -478,6 +478,7 @@ dma_addr_t ispmmu_map_pages(struct page **pages, int page_nr)
 	u32 pd, p_addr;
 	u32 *l2_table;
 	u32 page_index = 0;
+	dma_addr_t ret_addr;
 
 	DPRINTK_ISPMMU("map_pages: page_nr (number of pages) = %d\n", page_nr);
 
@@ -529,8 +530,11 @@ dma_addr_t ispmmu_map_pages(struct page **pages, int page_nr)
 	DPRINTK_ISPMMU("mapped to ISP virtual address 0x%x\n",
 		(u32)((idx << 20) + (p_addr & (PAGE_SIZE - 1))));
 
+	down(&ispmmu_mutex);
 	omap_writel(1, ISPMMU_GFLUSH);
-	return (dma_addr_t)((idx<<20) + (p_addr & (PAGE_SIZE - 1)));
+	up(&ispmmu_mutex);
+	ret_addr = (dma_addr_t)((idx<<20) + (p_addr & (PAGE_SIZE - 1)));
+	return ret_addr;
 
 release_mem:
 	for (; i >= 0; i--) {
@@ -576,6 +580,7 @@ int ispmmu_unmap(dma_addr_t v_addr)
 		return -EINVAL;
 	}
 
+	down(&ispmmu_mutex);
 	while (((*(ttb + idx)) & (ISPMMU_L1D_TYPE_MASK <<
 						ISPMMU_L1D_TYPE_SHIFT)) ==
 						(ISPMMU_L1D_TYPE_PAGE <<
@@ -583,13 +588,12 @@ int ispmmu_unmap(dma_addr_t v_addr)
 		*(ttb + idx) = (ISPMMU_L1D_TYPE_FAULT <<
 						ISPMMU_L1D_TYPE_SHIFT);
 		free_l2_page_table(l2p_table_addr[idx]);
-		l2p_table_addr[idx++] = 0;
-		if (!(idx % ISPMMU_REGION_ENTRIES_NR)) {
+		l2p_table_addr[idx] = 0;
+		if (!((++idx) % ISPMMU_REGION_ENTRIES_NR)) {
 			DPRINTK_ISPMMU("Do not exceed this 32M region\n");
 			break;
 		}
 	}
-	down(&ispmmu_mutex);
 	omap_writel(1, ISPMMU_GFLUSH);
 	up(&ispmmu_mutex);
 

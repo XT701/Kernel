@@ -145,9 +145,10 @@ int omap34xxcam_update_vbq(struct videobuf_buffer *vb)
 #ifndef CONFIG_VIDEO_OMAP3_HP3A
 	struct isph3a_aewb_xtrastats xtrastats;
 	struct isp_af_xtrastats af_xtrastats;
+#endif
+
+#if !defined(CONFIG_VIDEO_OMAP3_HP3A)
 	do_gettimeofday(&vb->ts);
-#else
-	ktime_get_ts((struct timespec *)&vb->ts);
 #endif
 
 	vb->field_count = atomic_add_return(2, &fh->field_count);
@@ -378,9 +379,17 @@ static int vidioc_g_fmt_cap(struct file *file, void *fh, struct v4l2_format *f)
 {
 	struct omap34xxcam_fh *ofh = fh;
 	struct omap34xxcam_videodev *vdev = ofh->vdev;
+	struct v4l2_format sensor_format;
 
+	/* Get size_out */
 	mutex_lock(&vdev->mutex);
 	f->fmt.pix = ofh->pix;
+
+	/* Get size_in (sensor pixel format) & save in user defined raw_data
+	   after f->fmt.pix */
+	vidioc_int_g_fmt_cap(vdev->vdev_sensor, &sensor_format);
+	memcpy(f->fmt.raw_data + sizeof(sensor_format.fmt.pix),
+		&sensor_format.fmt.pix, sizeof(sensor_format.fmt.pix));
 	mutex_unlock(&vdev->mutex);
 
 	return 0;
@@ -407,12 +416,9 @@ static int try_pix_parm(struct omap34xxcam_videodev *vdev,
 
 	if (wanted_pix_out->pixelformat == V4L2_PIX_FMT_W1S_PATT)
 		best_pix_in->pixelformat = V4L2_PIX_FMT_W1S_PATT;
-	else {
-		if (vdev->vfd->minor == CAM_DEVICE_SOC)
-			best_pix_in->pixelformat = V4L2_PIX_FMT_YUYV;
-		else
-			best_pix_in->pixelformat = V4L2_PIX_FMT_SGRBG10;
-	}
+	else
+		best_pix_in->pixelformat = V4L2_PIX_FMT_SGRBG10;
+
 	best_pix_out.height = INT_MAX >> 1;
 	best_pix_out.width = best_pix_out.height;
 
@@ -501,7 +507,8 @@ static int try_pix_parm(struct omap34xxcam_videodev *vdev,
 			 * Select bigger resolution if it's available
 			 * at same fps.
 			 */
-			if (frmi.width > best_pix_in->width
+			if ((frmi.width > best_pix_in->width ||
+				frmi.height > best_pix_in->height)
 			    && FPS_ABS_DIFF(fps, frmi.discrete)
 			    <= FPS_ABS_DIFF(fps, *best_ival))
 				goto do_it_now;
@@ -520,7 +527,7 @@ do_it_now:
 	if (best_pix_in->width == 0)
 		return -EINVAL;
 
-	dev_info(vdev->cam->dev, "w %d, h %d -> w %d, h %d\n",
+	dev_dbg(vdev->cam->dev, "w %d, h %d -> w %d, h %d\n",
 		 best_pix_in->width, best_pix_in->height,
 		 best_pix_out.width, best_pix_out.height);
 
@@ -1045,6 +1052,12 @@ static int vidioc_s_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
 
 	mutex_lock(&vdev->mutex);
 
+	/* If streaming, just change fps, don't try to change resolution */
+	if (vdev->streaming) {
+		rval = vidioc_int_s_parm(vdev->vdev_sensor, a);
+		goto out;
+	}
+
 	vdev->want_timeperframe = a->parm.capture.timeperframe;
 
 	pix_tmp = vdev->want_pix;
@@ -1052,6 +1065,7 @@ static int vidioc_s_parm(struct file *file, void *fh, struct v4l2_streamparm *a)
 	rval = s_pix_parm(vdev, &pix_tmp_sensor, &pix_tmp,
 			  &a->parm.capture.timeperframe);
 
+out:
 	mutex_unlock(&vdev->mutex);
 
 	return rval;
@@ -1201,7 +1215,7 @@ static int vidioc_enum_frameintervals(struct file *file, void *fh,
  * feedback. The request is then passed on to the ISP private IOCTL handler,
  * isp_handle_private()
  */
-static int vidioc_default(struct file *file, void *fh, int cmd, void *arg)
+static long vidioc_default(struct file *file, void *fh, int cmd, void *arg)
 {
 	struct omap34xxcam_fh *ofh = file->private_data;
 	struct omap34xxcam_videodev *vdev = ofh->vdev;
@@ -1292,9 +1306,9 @@ out:
  * @dev: numeric device identifier.
  * @settings: ptr to a sensor settings structure.
  *
- * This request is passed to the sensor driver based on the bit masked flags field of the
- * settings structure. If the sensor does not support the requested operation, an error is
- * returned.
+ * This request is passed to the sensor driver based on the bit masked flags
+ * field of the settings structure. If the sensor does not support the
+ * requested operation, an error is returned.
  *
  * If the requested device id is not valid, -ENODEV is returned.
  */
@@ -1303,6 +1317,7 @@ int omap34xxcam_sensor_settings(int dev, struct cam_sensor_settings *settings)
 	int err = -1;
 	struct omap34xxcam_videodev *vdev = NULL;
 	struct omap34xxcam_device *cam = omap34xxcam;
+	struct v4l2_streamparm a;
 	struct v4l2_control vc;
 	int i;
 
@@ -1317,6 +1332,14 @@ int omap34xxcam_sensor_settings(int dev, struct cam_sensor_settings *settings)
 		return -ENODEV;
 
 	mutex_lock(&vdev->mutex);
+
+	if ((settings->flags & OMAP34XXCAM_SET_FPS) &&
+		  settings->fps != 0) {
+		a.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		a.parm.capture.timeperframe.numerator = 1;
+		a.parm.capture.timeperframe.denominator = settings->fps;
+		err = vidioc_int_s_parm(vdev->vdev_sensor, &a);
+	}
 
 	if (settings->flags & OMAP34XXCAM_SET_EXPOSURE) {
 		vc.id = V4L2_CID_EXPOSURE;
@@ -1333,7 +1356,13 @@ int omap34xxcam_sensor_settings(int dev, struct cam_sensor_settings *settings)
 	}
 
 update_sensor_exit:
-   vc.id = V4L2_CID_EXPOSURE;
+	a.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if (vidioc_int_g_parm(vdev->vdev_sensor, &a) == 0) {
+		settings->fps = a.parm.capture.timeperframe.denominator /
+			a.parm.capture.timeperframe.numerator;
+	}
+
+	vc.id = V4L2_CID_EXPOSURE;
 	vc.value = 0;
 	if (vidioc_int_g_ctrl(vdev->vdev_sensor, &vc) == 0)
 		settings->exposure = (u32)vc.value;
