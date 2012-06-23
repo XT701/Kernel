@@ -6,7 +6,7 @@ config SGX540
 
 config SGX530
 	tristate "PowerVR SGX"
-	depends on ARCH_OMAP3
+	depends on ARCH_OMAP3 && !MACH_SHOLEST
 	---help---
 	  Support for the PowerVR SGX 3D core.
 
