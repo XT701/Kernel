@@ -29,6 +29,17 @@
 /* ISP uses a 10-bit value, OV8810 uses a 12-bit value */
 #define OV8810_BLACK_LEVEL_10BIT	8
 
+/* ISP Private IOCTLs */
+#define V4L2_CID_PRIVATE_SENSOR_REG_REQ		(V4L2_CID_PRIVATE_BASE + 20)
+#define V4L2_CID_PRIVATE_SENSOR_ID_REQ		(V4L2_CID_PRIVATE_BASE + 22)
+#define V4L2_CID_PRIVATE_COLOR_BAR     		(V4L2_CID_PRIVATE_BASE + 23)
+#define V4L2_CID_PRIVATE_FLASH_NEXT_FRAME	(V4L2_CID_PRIVATE_BASE + 24)
+#define V4L2_CID_PRIVATE_ORIENTATION     	(V4L2_CID_PRIVATE_BASE + 25)
+#define V4L2_CID_PRIVATE_LENS_CORRECTION     	(V4L2_CID_PRIVATE_BASE + 26)
+#define V4L2_CID_PRIVATE_SENSOR_PARAMS_REQ	(V4L2_CID_PRIVATE_BASE + 27)
+#define V4L2_CID_PRIVATE_START_MECH_SHUTTER_CAPTURE (V4L2_CID_PRIVATE_BASE + 28)
+#define V4L2_CID_PRIVATE_SHUTTER_PARAMS     	(V4L2_CID_PRIVATE_BASE + 29)
+
 /* Register initialization tables for ov8810 */
 /* Terminating list entry for reg */
 #define OV8810_REG_TERM		0xFFFF
@@ -54,7 +65,7 @@
 /* FPS Capabilities */
 #define OV8810_MIN_FPS			3
 #define OV8810_DEF_FPS			15
-#define OV8810_MAX_FPS			116
+#define OV8810_MAX_FPS			30
 
 /* Frame Delays */
 #define OV8810_GAIN_FRAME_DELAY 1
@@ -71,7 +82,7 @@
 #define OV8810_MAX_LINE_LENGTH_PCK 0xFFF0
 
 /* Gain Values (linear, Q8) */
-#define OV8810_MIN_LINEAR_GAIN	((u16)(1.2 * 256))
+#define OV8810_MIN_LINEAR_GAIN	((u16)(1.0 * 256))
 #define OV8810_MAX_LINEAR_GAIN	((u16)(31.0 * 256))
 
 /* Exposure time values (usecs)*/
@@ -89,24 +100,24 @@
  * System Control Registers
  */
 #define OV8810_AGCL				0x3000
-#define OV8810_AECL_H				0x3002
-#define OV8810_AECL_L				0x3003
+#define OV8810_AECL_H			0x3002
+#define OV8810_AECL_L			0x3003
 #define OV8810_PIDH				0x300A
 #define OV8810_PIDL				0x300B
-#define OV8810_R_PLL1				0x300E
+#define OV8810_R_PLL1			0x300E
 #define OV8810_R_PLL1_VT_SYS_DIV_SHIFT 4
 #define OV8810_R_PLL1_VT_SYS_DIV_MASK (0xF << \
 	OV8810_R_PLL1_VT_SYS_DIV_SHIFT)
 #define OV8810_R_PLL1_DIV8_MASK 	0x7
-#define OV8810_R_PLL2				0x300F
+#define OV8810_R_PLL2			0x300F
 #define OV8810_R_PLL2_OP_SYS_DIV_SHIFT 4
 #define OV8810_R_PLL2_OP_SYS_DIV_MASK (0xF << \
 	OV8810_R_PLL2_OP_SYS_DIV_SHIFT)
 #define OV8810_R_PLL2_OP_PIX_DIV_MASK 	0xF
-#define OV8810_R_PLL3				0x3010
+#define OV8810_R_PLL3			0x3010
 #define OV8810_R_PLL3_PLL_MULT_MASK 	0x7F
-#define OV8810_R_PLL4				0x3011
-#define OV8810_R_PLL4_PRE_DIV_MASK 	0xF
+#define OV8810_R_PLL4			0x3011
+#define OV8810_R_PLL4_PRE_DIV_MASK 		0xF
 
 #define OV8810_SYS				0x3012
 #define OV8810_ADDVS_H				0x301E
@@ -127,12 +138,6 @@
 #define OV8810_X_OUTPUT_SIZE_L			0x302D
 #define OV8810_Y_OUTPUT_SIZE_H			0x302E
 #define OV8810_Y_OUTPUT_SIZE_L			0x302F
-
-#define OV8810_5060HZ_CTRL			0x303D
-#define OV8810_5060HZ_CTRL_BAND50_SHIFT  0
-#define OV8810_5060HZ_CTRL_BAND50_MASK (0x1 << \
-	OV8810_5060HZ_CTRL_BAND50_SHIFT)
-
 #define OV8810_RESERVED_3058			0x3058
 #define OV8810_IO_CTRL2				0x30B2
 #define OV8810_DSIO0				0x30B3
@@ -162,16 +167,8 @@
 #define OV8810_IMAGE_TRANSFORM_VFLIP_SHIFT 7
 #define OV8810_IMAGE_TRANSFORM_VFLIP_MASK (0x1 << \
 	OV8810_IMAGE_TRANSFORM_VFLIP_SHIFT)
-#define OV8810_GROUP_WR				0x30FF
+#define OV8810_GROUP_WR			0x30FF
 #define OV8810_ISP_ENBL_0			0x3300
-#define OV8810_ISP_ENBL_0_BLC_EN_SHIFT 0
-#define OV8810_ISP_ENBL_0_EVEN_ODD_EN_SHIFT 1
-#define OV8810_ISP_ENBL_0_BC_EN_SHIFT 2
-#define OV8810_ISP_ENBL_0_WC_EN_SHIFT 3
-#define OV8810_ISP_ENBL_0_LENC_EN_SHIFT 4
-#define OV8810_ISP_ENBL_0_AWB_GAIN_EN_SHIFT 5
-#define OV8810_ISP_ENBL_0_AWB_STAT_EN_SHIFT 6
-#define OV8810_ISP_ENBL_0_ISP_EN_SHIFT 7
 #define OV8810_CBAR	 			0x3303
 #define OV8810_DIG_GAIN 			0x3309
 #define OV8810_SIZE_H0 				0x3316
@@ -194,114 +191,114 @@
  * OUT_TOP Registers
  */
 
-#define OV8810_MIPI_CTRL01			0x3601
+#define OV8810_MIPI_CTRL01	0x3601
 
-#define OV8810_MIPI_CTRL02			0x3602
+#define OV8810_MIPI_CTRL02	0x3602
 #define OV8810_MIPI_CTRL02_VIRTUALCH_ID_MASK	(0x3 << 6)
 
 
-#define OV8810_MIPI_CTRL0A			0x360A
-#define OV8810_MIPI_CTRL0B			0x360B
+#define OV8810_MIPI_CTRL0A	0x360A
+#define OV8810_MIPI_CTRL0B	0x360B
 #define OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK  0x1
 #define OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_1_MASK  0x2
 
-#define OV8810_MIPI_CTRL14			0x3614
+#define OV8810_MIPI_CTRL14	0x3614
 #define OV8810_MIPI_CTRL14_MIN_HS_ZERO_NUI_SHIFT	2
 #define OV8810_MIPI_CTRL14_MIN_HS_ZERO_NUI_MASK		(0x3F << \
 				OV8810_MIPI_CTRL14_MIN_HS_ZERO_NUI_SHIFT)
 #define OV8810_MIPI_CTRL14_MIN_HS_ZERO_H_MASK	0x3
 
-#define OV8810_MIPI_CTRL15			0x3615
+#define OV8810_MIPI_CTRL15	0x3615
 #define OV8810_MIPI_CTRL15_MIN_HS_ZERO_L_MASK	0xFF
 
-#define OV8810_MIPI_CTRL16			0x3616
+#define OV8810_MIPI_CTRL16	0x3616
 #define OV8810_MIPI_CTRL16_MIN_HS_TRAIL_NUI_SHIFT	2
 #define OV8810_MIPI_CTRL16_MIN_HS_TRAIL_NUI_MASK	(0x3F << \
 				OV8810_MIPI_CTRL16_MIN_HS_TRAIL_NUI_SHIFT)
 #define OV8810_MIPI_CTRL16_MIN_HS_TRAIL_H_MASK	0x3
 
-#define OV8810_MIPI_CTRL17			0x3617
+#define OV8810_MIPI_CTRL17	0x3617
 #define OV8810_MIPI_CTRL17_MIN_HS_TRAIL_L_MASK	0xFF
 
-#define OV8810_MIPI_CTRL18			0x3618
+#define OV8810_MIPI_CTRL18	0x3618
 #define OV8810_MIPI_CTRL18_MIN_CLK_ZERO_NUI_SHIFT	2
 #define OV8810_MIPI_CTRL18_MIN_CLK_ZERO_NUI_MASK	(0x3F << \
 				OV8810_MIPI_CTRL18_MIN_CLK_ZERO_NUI_SHIFT)
 #define OV8810_MIPI_CTRL18_MIN_CLK_ZERO_H_MASK	0x3
 
-#define OV8810_MIPI_CTRL19			0x3619
+#define OV8810_MIPI_CTRL19	0x3619
 #define OV8810_MIPI_CTRL19_MIN_CLK_ZERO_L_MASK	0xFF
 
-#define OV8810_MIPI_CTRL1A			0x361A
+#define OV8810_MIPI_CTRL1A	0x361A
 #define OV8810_MIPI_CTRL1A_MIN_CLK_PREPARE_NUI_SHIFT	2
 #define OV8810_MIPI_CTRL1A_MIN_CLK_PREPARE_NUI_MASK		(0x3F << \
 				OV8810_MIPI_CTRL1A_MIN_CLK_PREPARE_NUI_SHIFT)
 #define OV8810_MIPI_CTRL1A_MIN_CLK_PREPARE_H_MASK	0x3
 
-#define OV8810_MIPI_CTRL1B			0x361B
+#define OV8810_MIPI_CTRL1B	0x361B
 #define OV8810_MIPI_CTRL1B_MIN_CLK_PREPARE_L_MASK	0xFF
 
-#define OV8810_MIPI_CTRL1C			0x361C
+#define OV8810_MIPI_CTRL1C	0x361C
 #define OV8810_MIPI_CTRL1C_MAX_CLK_PREPARE_NUI_SHIFT	2
 #define OV8810_MIPI_CTRL1C_MAX_CLK_PREPARE_NUI_MASK		(0x3F << \
 				OV8810_MIPI_CTRL1C_MAX_CLK_PREPARE_NUI_SHIFT)
 #define OV8810_MIPI_CTRL1C_MAX_CLK_PREPARE_H_MASK	0x3
 
-#define OV8810_MIPI_CTRL1D			0x361D
+#define OV8810_MIPI_CTRL1D	0x361D
 #define OV8810_MIPI_CTRL1D_MAX_CLK_PREPARE_L_MASK	0xFF
 
-#define OV8810_MIPI_CTRL1E			0x361E
+#define OV8810_MIPI_CTRL1E	0x361E
 #define OV8810_MIPI_CTRL1E_MIN_CLK_POST_NUI_SHIFT	2
 #define OV8810_MIPI_CTRL1E_MIN_CLK_POST_NUI_MASK	(0x3F << \
 				OV8810_MIPI_CTRL1E_MIN_CLK_POST_NUI_SHIFT)
 #define OV8810_MIPI_CTRL1E_MIN_CLK_POST_H_MASK	0x3
 
-#define OV8810_MIPI_CTRL1F			0x361F
+#define OV8810_MIPI_CTRL1F	0x361F
 #define OV8810_MIPI_CTRL1F_MIN_CLK_POST_L_MASK	0xFF
 
-#define OV8810_MIPI_CTRL20			0x3620
+#define OV8810_MIPI_CTRL20	0x3620
 #define OV8810_MIPI_CTRL20_MIN_CLK_TRAIL_NUI_SHIFT	2
 #define OV8810_MIPI_CTRL20_MIN_CLK_TRAIL_NUI_MASK	(0x3F << \
 				OV8810_MIPI_CTRL20_MIN_CLK_TRAIL_NUI_SHIFT)
 #define OV8810_MIPI_CTRL20_MIN_CLK_TRAIL_H_MASK	0x3
 
-#define OV8810_MIPI_CTRL21			0x3621
+#define OV8810_MIPI_CTRL21	0x3621
 #define OV8810_MIPI_CTRL21_MIN_CLK_TRAIL_L_MASK	0xFF
 
-#define OV8810_MIPI_CTRL22			0x3622
+#define OV8810_MIPI_CTRL22	0x3622
 #define OV8810_MIPI_CTRL22_MIN_LPX_P_NUI_SHIFT	2
 #define OV8810_MIPI_CTRL22_MIN_LPX_P_NUI_MASK	(0x3F << \
 					OV8810_MIPI_CTRL22_MIN_LPX_P_NUI_SHIFT)
 #define OV8810_MIPI_CTRL22_MIN_LPX_P_H_MASK	0x3
 
-#define OV8810_MIPI_CTRL23			0x3623
+#define OV8810_MIPI_CTRL23	0x3623
 #define OV8810_MIPI_CTRL23_MIN_LPX_P_L_MASK	0xFF
 
-#define OV8810_MIPI_CTRL24			0x3624
+#define OV8810_MIPI_CTRL24	0x3624
 #define OV8810_MIPI_CTRL24_MIN_HS_PREPARE_NUI_SHIFT	2
 #define OV8810_MIPI_CTRL24_MIN_HS_PREPARE_NUI_MASK	(0x3F << \
 				OV8810_MIPI_CTRL24_MIN_HS_PREPARE_NUI_SHIFT)
 #define OV8810_MIPI_CTRL24_MIN_HS_PREPARE_H_MASK	0x3
 
-#define OV8810_MIPI_CTRL25			0x3625
+#define OV8810_MIPI_CTRL25	0x3625
 #define OV8810_MIPI_CTRL25_MIN_HS_PREPARE_L_MASK	0xFF
 
-#define OV8810_MIPI_CTRL26			0x3626
+#define OV8810_MIPI_CTRL26	0x3626
 #define OV8810_MIPI_CTRL26_MAX_HS_PREPARE_NUI_SHIFT	2
 #define OV8810_MIPI_CTRL26_MAX_HS_PREPARE_NUI_MASK	(0x3F << \
 				OV8810_MIPI_CTRL26_MAX_HS_PREPARE_NUI_SHIFT)
 #define OV8810_MIPI_CTRL26_MAX_HS_PREPARE_H_MASK	0x3
 
-#define OV8810_MIPI_CTRL27			0x3627
+#define OV8810_MIPI_CTRL27	0x3627
 #define OV8810_MIPI_CTRL27_MAX_HS_PREPARE_L_MASK	0xFF
 
-#define OV8810_MIPI_CTRL28			0x3628
+#define OV8810_MIPI_CTRL28	0x3628
 #define OV8810_MIPI_CTRL28_MIN_HS_EXIT_NUI_SHIFT	2
 #define OV8810_MIPI_CTRL28_MIN_HS_EXIT_NUI_MASK	(0x3F << \
 				OV8810_MIPI_CTRL28_MIN_HS_EXIT_NUI_SHIFT)
 #define OV8810_MIPI_CTRL28_MIN_HS_EXIT_H_MASK	0x3
 
-#define OV8810_MIPI_CTRL29			0x3629
+#define OV8810_MIPI_CTRL29	0x3629
 #define OV8810_MIPI_CTRL29_MIN_HS_EXIT_L_MASK	0xFF
 
 /*
@@ -309,13 +306,15 @@
  */
 /* ------------------------------------------------------ */
 
+int ov8810_write_reg(struct i2c_client *client, u16 reg, u8 val);
+
 /* Exposure time values */
 #define DEF_MIN_EXPOSURE	250
 #define DEF_MAX_EXPOSURE	128000
-#define DEF_EXPOSURE	    	33000
-#define EXPOSURE_STEP	    	50
+#define DEF_EXPOSURE	    33000
+#define EXPOSURE_STEP	    50
 
-#define DEF_LINEAR_GAIN		(2*256)
+#define DEF_LINEAR_GAIN	(2*256)
 #define LINEAR_GAIN_STEP	0x1
 
 struct ov8810_sensor_regif {
@@ -390,9 +389,8 @@ struct ov8810_frame_settings {
 	u16	y_addr_end;
 	u16	x_output_size;
 	u16	y_output_size;
-	u8 	v_subsample;
-	u8 	h_subsample;
-	u16 	binning_sensitivity;
+	u8 v_subsample;
+	u8 h_subsample;
 	struct v4l2_fract min_time_per_frame;
 };
 
@@ -403,8 +401,9 @@ struct ov8810_frame_settings {
  * @fine_int_tm: fine resolution interval time (pixel times)
  */
 struct ov8810_mipi_settings {
-	u16	hs_settle;
-	u16	bit_depth;
+	u16	num_data_lanes;
+	u16	hs_settle_lower;
+	u16	hs_settle_upper;
 };
 
 /*
@@ -446,12 +445,13 @@ enum pixel_format_ov {
 
 #define OV_NUM_IMAGE_SIZES		5
 #define OV_NUM_PIXEL_FORMATS		1
+#define OV_NUM_FPS			3
 
 const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
-
 	/* SIZE_408x306_Default settings */
 	{
 		{0x3100, 0x06},
+		{0x30fa, 0x00},
 		{0x3302, 0x20},
 		{0x3099, 0x81},
 		{0x309d, 0x64},
@@ -511,14 +511,12 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3300, 0x81},	/* all ISP except BLC off */
 		{0x3320, 0xc2},	/* AWB use manual 1x gain */
 		{0x30e7, 0x41},	/* active lo FREX */
-		{0x3610, 0x10},	/* MIPI Pclk Period 2x */
-		{0x3409, 0x04},	/* fix for 0x3FC max data */
 		{OV8810_REG_TERM, OV8810_VAL_TERM},
 	},
-
 	/* SIZE_816x612_Default settings */
 	{
 		{0x3100, 0x06},
+		{0x30fa, 0x00},
 		{0x3302, 0x20},
 		{0x3099, 0x81},
 		{0x309d, 0x64},
@@ -578,13 +576,12 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3300, 0x81},	/* all ISP except BLC off */
 		{0x3320, 0xc2},	/* AWB use manual 1x gain */
 		{0x30e7, 0x41},	/* active lo FREX */
-		{0x3610, 0x1b},	/* MIPI Pclk Period 2x */
-		{0x3409, 0x04},	/* fix for 0x3FC max data */
 		{OV8810_REG_TERM, OV8810_VAL_TERM},
 	},
 	/* SIZE_1632x918 Default settings */
 	{
 		{0x3100, 0x06},
+		{0x30fa, 0x00},
 		{0x3302, 0x20},
 		{0x3099, 0x81},
 		{0x309d, 0x64},
@@ -644,13 +641,12 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3300, 0x81},	/* all ISP except BLC off */
 		{0x3320, 0xc2},	/* AWB use manual 1x gain */
 		{0x30e7, 0x41},	/* active lo FREX */
-		{0x3610, 0x15},	/* MIPI Pclk Period 2x */
-		{0x3409, 0x04},	/* fix for 0x3FC max data */
 		{OV8810_REG_TERM, OV8810_VAL_TERM},
 	},
 	/* SIZE_1632x1224 Default settings */
 	{
 		{0x3100, 0x06},
+		{0x30fa, 0x00},
 		{0x3302, 0x20},
 		{0x3099, 0x81},
 		{0x309d, 0x64},
@@ -710,13 +706,12 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3300, 0x81},	/* all ISP except BLC off */
 		{0x3320, 0xc2},	/* AWB use manual 1x gain */
 		{0x30e7, 0x41},	/* active lo FREX */
-		{0x3610, 0x15},	/* MIPI Pclk Period 2x */
-		{0x3409, 0x04},	/* fix for 0x3FC max data */
 		{OV8810_REG_TERM, OV8810_VAL_TERM},
 	},
 	/* SIZE_3264x2448 Default settings */
 	{
 		{0x3100, 0x06},
+		{0x30fa, 0x00},
 		{0x3302, 0x20},
 		{0x3099, 0x81},
 		{0x309d, 0x64},
@@ -778,8 +773,6 @@ const static struct ov8810_reg ov8810_common[OV_NUM_IMAGE_SIZES][150] = {
 		{0x3300, 0x83},	/* all, ISP, except BLC, off */
 		{0x3320, 0xc2},	/* AWB, use, manual, 1x, gain */
 		{0x30e7, 0x41},	/* active lo FREX */
-		{0x3610, 0x15},	/* MIPI Pclk Period 2x */
-		{0x3409, 0x04},	/* fix for 0x3FC max data */
 		{OV8810_REG_TERM, OV8810_VAL_TERM},
 	},
 };
@@ -789,7 +782,6 @@ const static struct ov8810_reg ov8810_50_60_hz_detect_tbl[] = {
 	{0x3014, 0x40},
 	{0x304c, 0x0c},
 	{0x30a4, 0x00},
-	{0x30ab, 0x04},
 	{0x30ad, 0x04},
 	{0x3040, 0x00},
 	{0x3041, 0x34},
@@ -805,36 +797,6 @@ const static struct ov8810_reg ov8810_50_60_hz_detect_tbl[] = {
 	/* read 303d[0], 1=50hz, 0=60hz */
 	{OV8810_REG_TERM, OV8810_VAL_TERM},
 };
-
-/* LDO 1.6V Register Settings */
-const static struct ov8810_reg ov8810_ldo_1_6v[2][10] = {
-
-	/* Settings used depend on 50-60 Hz Detection On/Off */
-
-	/* 50-60 Hz Detection OFF */
-	{
-		{0x30a8, 0x2f},
-		{0x30a9, 0x00},
-		{0x30aa, 0x57},
-		{0x30ab, 0x34},
-		{0x30ac, 0x30},
-		{0x30ad, 0x01},
-		{0x30ae, 0x02},
-		{OV8810_REG_TERM, OV8810_VAL_TERM},
-	},
-
-	/* 50-60 Hz Detection ON */
-	{
-		{0x30a8, 0x2f},
-		{0x30a9, 0x00},
-		{0x30aa, 0x57},
-		{0x30ab, 0x04},
-		{0x30ac, 0x30},
-		{0x30ad, 0x03},
-		{0x30ae, 0x02},
-		{OV8810_REG_TERM, OV8810_VAL_TERM},
-		},
-	};
 
 /* Lens correction settings */
 const static struct ov8810_reg len_correction_tbl[] = {
@@ -993,8 +955,6 @@ const static struct ov8810_reg len_correction_tbl[] = {
 const static struct ov8810_reg ov8810_common_csi2[] = {
 	{OV8810_MIPI_CTRL0B, 0x0f},  /* disable MIPI output (enabled later) */
 	{0x3601, 0x16},
-	{0x30B8, 0x28},		/* disable low amp MIPI & pwr down MIPI PHY
-				   when at sleep */
 	{OV8810_REG_TERM, OV8810_VAL_TERM},
 };
 

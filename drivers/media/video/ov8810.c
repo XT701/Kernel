@@ -18,9 +18,9 @@
 #include <media/v4l2-int-device.h>
 #include <plat/resource.h>
 #include <media/ov8810.h>
-#include "omap34xxcam.h"
-#include "isp/isp.h"
-#include "isp/ispcsi2.h"
+#include "oldomap34xxcam.h"
+#include "oldisp/isp.h"
+#include "oldisp/ispcsi2.h"
 #include "ov8810_reg.h"
 
 #define OV8810_DRIVER_NAME  "ov8810"
@@ -51,11 +51,6 @@ struct ov8810_sensor_params {
 	u32 line_time;  /* usec, q8 */
 	u16 gain_frame_delay;
 	u16 exp_time_frame_delay;
-	u16 frame_length_lines;
-	u16 line_length_clocks;
-	u16 x_output_size;
-	u16 y_output_size;
-	u16 binning_sensitivity;
 };
 
 struct ov8810_flash_params {
@@ -82,42 +77,6 @@ struct ov8810_exp_params {
 	u16 min_linear_gain;
 	u16 max_linear_gain;
 };
-
-enum ioctl_op {
-	IOCTL_RD = 0,
-	IOCTL_WR
-};
-
-enum sensor_op {
-	SENSOR_REG_REQ = 0,
-	CALIBRATION_ADJ,
-	SENSOR_ID_REQ,
-	COLOR_BAR,
-	FLASH_NEXT_FRAME,
-	ORIENTATION,
-	LENS_CORRECTION,
-	SENSOR_PARAMS_REQ,
-	START_MECH_SHUTTER_CAPTURE,
-	SET_SHUTTER_PARAMS,
-	SENSOR_OTP_REQ,
-	DEFECT_PIXEL_CORRECTION,
-	FLICKER_DETECT_REQ,
-	CROPPED_READOUT_REQ
-};
-
-struct camera_params_control {
-	enum ioctl_op xaction;
-	enum sensor_op op;
-	u32 data_in;
-	u32 data_out;
-	u16 data_in_size;
-	u16 data_out_size;
-};
-
-/* Private IOCTLs */
-
-#define V4L2_CID_PRIVATE_S_PARAMS	(V4L2_CID_PRIVATE_BASE + 22)
-#define V4L2_CID_PRIVATE_G_PARAMS	(V4L2_CID_PRIVATE_BASE + 23)
 
 /**
  * struct ov8810_sensor - main structure for storage of sensor information
@@ -179,9 +138,6 @@ static struct ov8810_sensor ov8810 = {
 		.type = ROLLING_SHUTTER_TYPE,
 	},
 	.orientation = OV8810_HORZ_FLIP_ONLY,
-	.flash = {
-		.flash_time = 0,
-	},
 };
 
 static struct i2c_driver ov8810sensor_i2c_driver;
@@ -192,6 +148,10 @@ const static struct v4l2_fmtdesc ov8810_formats[] = {
 	{
 		.description	= "RAW10",
 		.pixelformat	= V4L2_PIX_FMT_SGRBG10,
+	},
+	{
+		.description	= "Walking 1's pattern",
+		.pixelformat	= V4L2_PIX_FMT_W1S_PATT,
 	}
 };
 
@@ -212,28 +172,25 @@ const static struct ov8810_reg ov8810_strobe_trigger_reg[] = {
     {OV8810_REG_TERM, OV8810_VAL_TERM},
 };
 
-const static bool use_ldo_1_6v_change = true;
-#define LDO_1_6V_GAIN_SCALE_FACTOR_Q12 ((u16)(1.07237 * 4096))
-
 static struct ov8810_sensor_settings sensor_settings[] = {
 
 	/* SIZE_125K */
-		/* 1-lane, RAW 10, PCLK = 97.2MHz, MIPI_CLK = 74.3MHz,
-		MIPI_PCLK = 1.25x97.2 = 121.5MHz,
-		MCLK = 27Mhz, FPS = 116, Blanking = 1msec */
+		/* 2-lane, RAW 10, PCLK = 13.5MHz, MIPI_CLK = 67.5MHz,
+		MIPI_PCLK = 1.25x13.5 = 16.9MHz,
+		MCLK = 27Mhz, FPS = 30, Blanking = 10msec */
 	{
 		.clk = {
-			.pll_mult = 36,
+			.pll_mult = 44,
 			.pll_pre_div = 2,
-			.vt_sys_div = 1,
-			.op_sys_div = 2,
-			.op_pix_div = 8,
+			.vt_sys_div = 2,
+			.op_sys_div = 8,
+			.op_pix_div = 4,
 			.div8 = 5,
 			.rp_clk_div = 4,
 		},
 		.frame = {
-			.frame_len_lines_min = 354,
-			.line_len_pck_min = 2368,
+			.frame_len_lines_min = 433,
+			.line_len_pck_min = 4576,
 			.x_addr_start = 0,
 			.x_addr_end = 3359,
 			.y_addr_start = 0,
@@ -242,29 +199,29 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.y_output_size = 306,
 			.v_subsample = 8,
 			.h_subsample = 8,
-			.binning_sensitivity = (u16)(2.0 * 256),
 			.min_time_per_frame = {
 				.numerator = 1,
-				.denominator = 116,
+				.denominator = 30,
 			},
 		},
 		.mipi = {
-			.hs_settle = 19,
-			.bit_depth = 10,
+			.num_data_lanes = 2,
+			.hs_settle_lower = 5,
+			.hs_settle_upper = 14,
 		},
 	},
 
 	/* SIZE_500K */
-		/* 1-lane, RAW 10, PCLK = 29.7MHz, MIPI_CLK = 148.5MHz,
+		/* 2-lane, RAW 10, PCLK = 29.7MHz, MIPI_CLK = 148.5MHz,
 		   MIPI_PCLK = 1.25x29.7 = 37.1MHz,
 		   MCLK = 27Mhz, FPS = 30, Blanking = 10msec */
 	{
 		.clk = {
-			.pll_mult = 42,
+			.pll_mult = 43, /*44 causes pink vf, 42 RF spurs*/
 			.pll_pre_div = 2,
 			.vt_sys_div = 2,
-			.op_sys_div = 2,
-			.op_pix_div = 8,
+			.op_sys_div = 4,
+			.op_pix_div = 4,
 			.div8 = 5,
 			.rp_clk_div = 2,
 		},
@@ -272,27 +229,27 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.frame_len_lines_min = 806,
 			.line_len_pck_min = 2344,
 			.x_addr_start = 0,
-			.x_addr_end = 3295,
+			.x_addr_end = 3311,
 			.y_addr_start = 0,
 			.y_addr_end = 2463,
 			.x_output_size = 816,
 			.y_output_size = 612,
 			.v_subsample = 4,
 			.h_subsample = 4,
-			.binning_sensitivity = (u16)(2.0 * 256),
 			.min_time_per_frame = {
 				.numerator = 1,
 				.denominator = 30,
 			},
 		},
 		.mipi = {
-			.hs_settle = 23,
-			.bit_depth = 10,
+			.num_data_lanes = 2,
+				.hs_settle_lower = 7,
+				.hs_settle_upper = 21,
 		},
 	},
 
 	/* SIZE_1_5M */
-		/* 1-lane, RAW 10, PCLK = 75.6MHz, MIPI_CLK = 378MHz,
+		/* 2-lane, RAW 10, PCLK = 75.6MHz, MIPI_CLK = 378MHz,
 		   MIPI_PCLK = 1.25x75.6 = 94.5MHz,
 		   MCLK = 27Mhz, FPS = 30, Blanking = 5ms */
 	{
@@ -300,8 +257,8 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.pll_mult = 56,
 			.pll_pre_div = 2,
 			.vt_sys_div = 2,
-			.op_sys_div = 1,
-			.op_pix_div = 8,
+			.op_sys_div = 2,
+			.op_pix_div = 4,
 			.div8 = 5,
 			.rp_clk_div = 1,
 		},
@@ -316,20 +273,20 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.y_output_size = 918,
 			.v_subsample = 2,
 			.h_subsample = 2,
-			.binning_sensitivity = (u16)(2.0 * 256),
 			.min_time_per_frame = {
 				.numerator = 1,
 				.denominator = 30,
 			},
 		},
 		.mipi = {
-			.hs_settle = 43,
-			.bit_depth = 10,
+			.num_data_lanes = 2,
+				.hs_settle_lower = 14,
+				.hs_settle_upper = 44,
 		},
 	},
 
 	/* SIZE_2M */
-		/* 1-lane, RAW 10, PCLK = 83.7MHz, MIPI_CLK = 378MHz,
+		/* 2-lane, RAW 10, PCLK = 83.7MHz, MIPI_CLK = 378MHz,
 		   MIPI_PCLK = 1.25x83.7 = 104.6MHz,
 		   MCLK = 27Mhz, FPS = 28, Blanking = 1.8ms */
 	{
@@ -337,8 +294,8 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.pll_mult = 62,
 			.pll_pre_div = 2,
 			.vt_sys_div = 2,
-			.op_sys_div = 1,
-			.op_pix_div = 8,
+			.op_sys_div = 2,
+			.op_pix_div = 4,
 			.div8 = 5,
 			.rp_clk_div = 1,
 		},
@@ -353,20 +310,20 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.y_output_size = 1224,
 			.v_subsample = 2,
 			.h_subsample = 2,
-			.binning_sensitivity = (u16)(2.0 * 256),
 			.min_time_per_frame = {
 				.numerator = 1,
 				.denominator = 28,
 			},
 		},
 		.mipi = {
-			.hs_settle = 43,
-			.bit_depth = 10,
+			.num_data_lanes = 2,
+				.hs_settle_lower = 14,
+				.hs_settle_upper = 44,
 		},
 	},
 
 	/* SIZE_8M */
-		/* 1-lane, RAW, 10, PCLK = 75.6MHz, MIPI_CLK = 378MHz,
+		/* 2-lane, RAW, 10, PCLK = 75.6MHz, MIPI_CLK = 378MHz,
 		   MIPI_PCLK = 1.25x75.6 = 94.5MHz,
 		   MCLK = 27Mhz, FPS = 7.685, Blanking = 2ms */
 	{
@@ -374,8 +331,8 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.pll_mult = 56,
 			.pll_pre_div = 2,
 			.vt_sys_div = 2,
-			.op_sys_div = 1,
-			.op_pix_div = 8,
+			.op_sys_div = 2,
+			.op_pix_div = 4,
 			.div8 = 5,
 			.rp_clk_div = 1,
 		},
@@ -390,15 +347,15 @@ static struct ov8810_sensor_settings sensor_settings[] = {
 			.y_output_size = 2448,
 			.v_subsample = 1,
 			.h_subsample = 1,
-			.binning_sensitivity = (u16)(1.0 * 256),
 			.min_time_per_frame = {
 				.numerator = 3,
 				.denominator = 24,
 			},
 		},
 		.mipi = {
-			.hs_settle = 43,
-			.bit_depth = 10,
+			.num_data_lanes = 2,
+				.hs_settle_lower = 14,
+				.hs_settle_upper = 44,
 		},
 	}
 };
@@ -436,11 +393,59 @@ static struct vcontrol {
 		},
 		.current_value = DEF_LINEAR_GAIN,
 	},
-    {
+	{
 		{
-			.id = V4L2_CID_PRIVATE_S_PARAMS,
+			.id = V4L2_CID_PRIVATE_COLOR_BAR,
 			.type = V4L2_CTRL_TYPE_INTEGER,
-			.name = "Set Camera Params",
+			.name = "Color Bar",
+			.minimum = 0,
+			.maximum = 1,
+			.step = 0,
+			.default_value = 0,
+		},
+		.current_value = 0,
+	},
+	{
+		{
+			.id = V4L2_CID_PRIVATE_FLASH_NEXT_FRAME,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Flash On Next Frame",
+			.minimum = 0,
+			.maximum = 1,
+			.step = 0,
+			.default_value = 0,
+		},
+		.current_value = 0,
+	},
+	{
+		{
+			.id = V4L2_CID_PRIVATE_ORIENTATION,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Orientation",
+			.minimum = OV8810_NO_HORZ_FLIP_OR_VERT_FLIP,
+			.maximum = OV8810_HORZ_FLIP_AND_VERT_FLIP,
+			.step = 0,
+			.default_value = OV8810_HORZ_FLIP_ONLY,
+		},
+		.current_value = OV8810_HORZ_FLIP_ONLY,
+	},
+	{
+		{
+			.id = V4L2_CID_PRIVATE_LENS_CORRECTION,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Lens Correction",
+			.minimum = 0,
+			.maximum = 1,
+			.step = 0,
+			.default_value = 0,
+		},
+		.current_value = 0,
+	},
+	{
+		{
+			.id = V4L2_CID_PRIVATE_SENSOR_ID_REQ,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Sensor ID",
 			.minimum = 0,
 			.maximum = -1,
 			.step = 0,
@@ -450,138 +455,50 @@ static struct vcontrol {
 	},
 	{
 		{
-			.id = V4L2_CID_PRIVATE_G_PARAMS,
+			.id = V4L2_CID_PRIVATE_SHUTTER_PARAMS,
 			.type = V4L2_CTRL_TYPE_INTEGER,
-			.name = "Get Camera Params",
+			.name = "Shutter Params",
+			.minimum = 0,
+			.maximum = 1,
+			.step = 1,
+			.default_value = 0,
+		},
+		.current_value = 0,
+	},
+	{
+		{
+			.id = V4L2_CID_PRIVATE_START_MECH_SHUTTER_CAPTURE,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Start Mech Shutter Capture",
+			.minimum = 0,
+			.maximum = 1,
+			.step = 1,
+			.default_value = 0,
+		},
+		.current_value = 0,
+	},
+	{
+		{
+			.id = V4L2_CID_PRIVATE_SENSOR_REG_REQ,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Sensor Register",
+			.minimum = 0,
+			.maximum = 1,
+			.step = 1,
+			.default_value = 0,
+		},
+		.current_value = 0,
+	},
+	{
+		{
+			.id = V4L2_CID_PRIVATE_SENSOR_PARAMS_REQ,
+			.type = V4L2_CTRL_TYPE_INTEGER,
+			.name = "Sensor Params",
 			.minimum = 0,
 			.maximum = -1,
 			.step = 0,
 			.default_value = 0,
 		},
-		.current_value = 0,
-	},
-};
-
-struct private_vcontrol {
-    int id;
-    int type;
-    char name[32];
-    int minimum;
-    int maximum;
-    int step;
-    int default_value;
-    int current_value;
-};
-
-static struct private_vcontrol video_control_private[] = {
-	{
-		.id = SENSOR_REG_REQ,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.name = "Sensor Register",
-		.minimum = 0,
-		.maximum = 1,
-		.step = 1,
-		.default_value = 0,
-		.current_value = 0,
-	},
-	{
-		.id = SENSOR_ID_REQ,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.name = "Sensor ID",
-		.minimum = 0,
-		.maximum = -1,
-		.step = 0,
-		.default_value = 0,
-		.current_value = 0,
-	},
-	{
-		.id = COLOR_BAR,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.name = "Color Bar",
-		.minimum = 0,
-		.maximum = 1,
-		.step = 0,
-		.default_value = 0,
-		.current_value = 0,
-	},
-	{
-		.id = FLASH_NEXT_FRAME,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.name = "Flash On Next Frame",
-		.minimum = 0,
-		.maximum = 1,
-		.step = 0,
-		.default_value = 0,
-		.current_value = 0,
-	},
-	{
-		.id = ORIENTATION,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.name = "Orientation",
-		.minimum = OV8810_NO_HORZ_FLIP_OR_VERT_FLIP,
-		.maximum = OV8810_HORZ_FLIP_AND_VERT_FLIP,
-		.step = 0,
-		.default_value = OV8810_NO_HORZ_FLIP_OR_VERT_FLIP,
-		.current_value = OV8810_NO_HORZ_FLIP_OR_VERT_FLIP,
-	},
-	{
-		.id = LENS_CORRECTION,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.name = "Lens Correction",
-		.minimum = 0,
-		.maximum = 1,
-		.step = 0,
-		.default_value = 0,
-		.current_value = 0,
-	},
-	{
-		.id = SENSOR_PARAMS_REQ,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.name = "Sensor Params",
-		.minimum = 0,
-		.maximum = -1,
-		.step = 0,
-		.default_value = 0,
-		.current_value = 0,
-	},
-	{
-		.id = START_MECH_SHUTTER_CAPTURE,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.name = "Start Mech Shutter Capture",
-		.minimum = 0,
-		.maximum = 1,
-		.step = 1,
-		.default_value = 0,
-		.current_value = 0,
-	},
-	{
-		.id = SET_SHUTTER_PARAMS,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.name = "Shutter Params",
-		.minimum = 0,
-		.maximum = 1,
-		.step = 1,
-		.default_value = 0,
-		.current_value = 0,
-	},
-	{
-		.id = DEFECT_PIXEL_CORRECTION,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.name = "Defect Pixel Correction",
-		.minimum = 0,
-		.maximum = -1,
-		.step = 0,
-		.default_value = 0,
-		.current_value = 0,
-	},
-	{
-		.id = FLICKER_DETECT_REQ,
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.name = "Flicker Detect",
-		.minimum = 0,
-		.maximum = -1,
-		.step = 0,
-		.default_value = 0,
 		.current_value = 0,
 	},
 };
@@ -603,21 +520,6 @@ static int find_vctrl(int id)
 
 	for (i = (ARRAY_SIZE(video_control) - 1); i >= 0; i--)
 		if (video_control[i].qc.id == id)
-			break;
-	if (i < 0)
-		i = -EINVAL;
-	return i;
-}
-
-static int find_vctrl_private(int id)
-{
-	int i;
-
-	if (id < 0)
-		return -EDOM;
-
-	for (i = 0; i < sizeof(video_control_private); i++)
-		if (video_control_private[i].id == id)
 			break;
 	if (i < 0)
 		i = -EINVAL;
@@ -649,6 +551,11 @@ static int ov8810_read_reg(struct i2c_client *client, u16 data_length, u16 reg,
 	data[1] = (u8) (reg & 0xff);
 
 	err = i2c_transfer(client->adapter, msg, 1);
+	if (err < 0) {
+		msleep(5);
+		err = i2c_transfer(client->adapter, msg, 1);
+	}
+
 	if (err >= 0) {
 		mdelay(3);
 		msg->flags = I2C_M_RD;
@@ -667,7 +574,7 @@ static int ov8810_read_reg(struct i2c_client *client, u16 data_length, u16 reg,
 				(data[1] << 16) + (data[0] << 24);
 		return 0;
 	}
-	dev_err(&client->dev, "read from offset 0x%x error %d\n", reg, err);
+	printk(KERN_ERR "OV8810: read from offset 0x%x error %d\n", reg, err);
 	return err;
 }
 
@@ -677,16 +584,16 @@ static int ov8810_read_reg(struct i2c_client *client, u16 data_length, u16 reg,
  * @val: Value to be written to a specific register.
  * Returns zero if successful, or non-zero otherwise.
  */
-static int ov8810_write_reg(struct i2c_client *client, u16 reg, u8 val)
+int ov8810_write_reg(struct i2c_client *client, u16 reg, u8 val)
 {
 	int err = 0;
 	struct i2c_msg msg[1];
 	unsigned char data[3];
-	int retries = 0;
+	int retries = 5;
 
 	if (!client->adapter)
 		return -ENODEV;
-retry:
+
 	msg->addr = client->addr;
 	msg->flags = I2C_M_WR;
 	msg->len = 3;
@@ -697,19 +604,14 @@ retry:
 	data[1] = (u8) (reg & 0xff);
 	data[2] = val;
 
-	err = i2c_transfer(client->adapter, msg, 1);
-	udelay(50);
-
-	if (err >= 0)
-		return 0;
-
-	if (retries <= 5) {
-		DPRINTK_OV8810("Retrying I2C... %d\n", retries);
-		retries++;
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(msecs_to_jiffies(20));
-		goto retry;
-	}
+	do {
+		err = i2c_transfer(client->adapter, msg, 1);
+		if (err >= 0) {
+			udelay(50);
+			return 0;
+		}
+		msleep(5);
+	} while ((--retries) > 0);
 
 	return err;
 }
@@ -772,8 +674,8 @@ int ov8810_set_exposure_time(u32 exp_time, struct v4l2_int_device *s,
 		}
 
 		if (exp_time < sensor->exposure.min_exp_time) {
-			DPRINTK_OV8810("OV8810: Exposure time %dus is " \
-				"less than legal limit %dus\n",
+			printk(KERN_ERR "OV8810: Exposure time %dms is less " \
+				"than regal limit %dms\n",
 				exp_time, sensor->exposure.min_exp_time);
 
 			exp_time = sensor->exposure.min_exp_time;
@@ -781,8 +683,8 @@ int ov8810_set_exposure_time(u32 exp_time, struct v4l2_int_device *s,
 
 		/* OV8810 cannot accept exposure time longer than frame time */
 		if (exp_time > sensor->exposure.fps_max_exp_time) {
-			DPRINTK_OV8810("OV8810: Exposure time %dus is " \
-				"greater than legal limit %dus\n",
+			printk(KERN_ERR "OV8810: Exposure time %dms is " \
+				"greater than legal limit %dms\n",
 				exp_time, sensor->exposure.fps_max_exp_time);
 
 			exp_time = sensor->exposure.fps_max_exp_time;
@@ -815,7 +717,7 @@ write_aecl:
 	}
 
 	if (err)
-		dev_err(&client->dev, "Error setting exposure time...%d\n",
+		printk(KERN_ERR "OV8810: Error setting exposure time...%d\n",
 			err);
 	else {
 		if (lvc)
@@ -843,7 +745,6 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 							struct vcontrol *lvc)
 {
 	/* Inputs linear Q8 gain */
-	u16 adj_linear_gain_Q8 = linear_gain_Q8;
 	u16 anlg_gain_stage_2x = 0, dgtl_gain_stage_2x = 0;
 	u16 shift_bits = 0;
 	u16 anlg_gain_fraction = 0;
@@ -853,45 +754,36 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 	struct i2c_client *client = sensor->i2c_client;
 
 	if (linear_gain_Q8 < sensor->exposure.min_linear_gain) {
-		DPRINTK_OV8810("Gain %d less than legal limit %d\n",
+		printk(KERN_ERR "OV8810: Gain %d less than regal limit %d\n",
 			linear_gain_Q8, sensor->exposure.min_linear_gain);
 
-		adj_linear_gain_Q8 = sensor->exposure.min_linear_gain;
+		linear_gain_Q8 = sensor->exposure.min_linear_gain;
 	}
 
 	if (linear_gain_Q8 > sensor->exposure.max_linear_gain) {
-		DPRINTK_OV8810("Gain %d greater than legal limit %d\n",
+		printk(KERN_ERR "OV8810: Gain %d greater than regal limit %d\n",
 			linear_gain_Q8, sensor->exposure.max_linear_gain);
 
-		adj_linear_gain_Q8 = sensor->exposure.max_linear_gain;
+		linear_gain_Q8 = sensor->exposure.max_linear_gain;
 	}
-
-	if (use_ldo_1_6v_change) {
-		/* scale for LDO=1.63 vrs LDO=1.52 (nom) */
-		adj_linear_gain_Q8 = ((u32)adj_linear_gain_Q8 *
-			LDO_1_6V_GAIN_SCALE_FACTOR_Q12) >> 12;
-	}
-
-	/* add 1/32 for rounding below */
-	adj_linear_gain_Q8 += 1 << 3;
 
 	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
-		if (adj_linear_gain_Q8 >= 16*256) {
+		if (linear_gain_Q8 >= 16*256) {
 			dgtl_gain_stage_2x = 0x80;
 			anlg_gain_stage_2x = 0x70;
 			shift_bits = 4;
-		} else if (adj_linear_gain_Q8 >= 8*256) {
+		} else if (linear_gain_Q8 >= 8*256) {
 			anlg_gain_stage_2x = 0x70;
 			shift_bits = 3;
-		} else if (adj_linear_gain_Q8 >= 4*256) {
+		} else if (linear_gain_Q8 >= 4*256) {
 			anlg_gain_stage_2x = 0x30;
 			shift_bits = 2;
-		} else if (adj_linear_gain_Q8 >= 2*256) {
+		} else if (linear_gain_Q8 >= 2*256) {
 			anlg_gain_stage_2x = 0x10;
 			shift_bits = 1;
 		}
 
-		anlg_gain_fraction = adj_linear_gain_Q8 >> shift_bits;
+		anlg_gain_fraction = linear_gain_Q8 >> shift_bits;
 		 /* subt 1 (Q8) and take upper 4 bits */
 		anlg_gain_fraction = (anlg_gain_fraction - (1*256)) >> 4;
 		if (anlg_gain_fraction > 0x0f)
@@ -904,25 +796,23 @@ int ov8810_set_gain(u16 linear_gain_Q8, struct v4l2_int_device *s,
 			err = ov8810_write_reg(client, OV8810_AGCL,
 				anlg_gain_register);
 
-			DPRINTK_OV8810("gain =%d/256, adj_gain =%d/256, " \
+			DPRINTK_OV8810("gain =%d/256, " \
 				"angl_gain reg = 0x%x\n",
-				linear_gain_Q8, adj_linear_gain_Q8,
-				anlg_gain_register);
+				linear_gain_Q8, anlg_gain_register);
 		}
 
 		if (sensor->exposure.digital_gain != dgtl_gain_register) {
 			err = ov8810_write_reg(client, OV8810_DIG_GAIN,
 				dgtl_gain_register);
 
-			DPRINTK_OV8810("gain =%d/256, adj_gain =%d/256, " \
+			DPRINTK_OV8810("gain =%d/256, "
 				"dgtl_gain_reg = 0x%x\n",
-				linear_gain_Q8, adj_linear_gain_Q8,
-				dgtl_gain_register);
+				linear_gain_Q8, dgtl_gain_register);
 		}
 	}
 
 	if (err) {
-		dev_err(&client->dev, "Error setting analog gain: %d\n", err);
+		printk(KERN_ERR "OV8810: Error setting analog gain: %d\n", err);
 		return err;
 	} else {
 		if (lvc)
@@ -945,7 +835,7 @@ static int ov8810_init_exposure_params(struct v4l2_int_device *s)
 }
 
 /**
- * ov8810_set_framerate - Sets framerate by adjusting line_len_pck reg.
+ * ov8810_set_framerate - Sets framerate by adjusting frame_len_lines reg.
  * @s: pointer to standard V4L2 device structure
  * @fper: frame period numerator and denominator in seconds
  *
@@ -956,15 +846,7 @@ static int ov8810_set_framerate(struct v4l2_int_device *s,
 			struct v4l2_fract *fper, enum image_size_ov isize)
 {
 	u8 lut[9] = {1, 1, 1, 1, 2, 2, 2, 2, 4}, skip_factor;
-
-	/* Line_len_pck modulus table */
-	u8 line_length_pck_modulus_lut[3][9] = {
-		{1, 1, 1, 1, 2, 2, 2, 2, 4},  	/* bit depth = 8 */
-		{4, 4, 4, 4, 8, 8, 8, 8, 16},	/* bit depth = 10 */
-		{2, 2, 2, 2, 4, 4, 4, 4, 8}	/* bit depth = 12 */
-	}, mod;
-	u16 bd_index, ss_index;
-	u32 line_len_pck, line_len_pck_q8, line_time_q8;
+	u32 frame_length_lines, line_time_q8;
 	int err = 0, i = 0;
 	struct ov8810_sensor *sensor = s->priv;
 	struct i2c_client *client = sensor->i2c_client;
@@ -974,61 +856,34 @@ static int ov8810_set_framerate(struct v4l2_int_device *s,
 	/* limit desired frame period to min frame period for this readout */
 	if (((fper->numerator << 8) / fper->denominator) <
 		((ss->frame.min_time_per_frame.numerator << 8) /
-		  ss->frame.min_time_per_frame.denominator))	{
+		  ss->frame.min_time_per_frame.denominator)) {
 		fper->numerator = ss->frame.min_time_per_frame.numerator;
 		fper->denominator = ss->frame.min_time_per_frame.denominator;
 	}
 
-	/* use minimum number of lines */
-	ss->frame.frame_len_lines = ss->frame.frame_len_lines_min;
-
-	/* calc desired line_time (usec's (q8)) */
-	line_time_q8 = (((u32)fper->numerator * 1000000 * 256 /
-		fper->denominator)) / ss->frame.frame_len_lines;
-
 	skip_factor = lut[ss->frame.h_subsample];
-	line_len_pck_q8 = (line_time_q8 * ((sensor->freq.pclk * skip_factor) /
-		10000)) / 100;
-
-	/* TODO: Update for other bit-depths. This assumes bit-depth=10.  */
-	if (ss->frame.h_subsample == 1 || ss->frame.h_subsample == 2) {
-		/* convert from q8 to nearest line_len_pck divisible by 4 */
-		line_len_pck = ((line_len_pck_q8 + 0x200) >> 8) & ~0x3;
-	} else if (ss->frame.h_subsample == 4) {
-		/* convert from q8 to nearest line_len_pck divisible by 8 */
-		line_len_pck = ((line_len_pck_q8 + 0x400) >> 8) & ~0x7;
-	} else {
-		/* convert from q8 to nearest line_len_pck divisible by 16*/
-		line_len_pck = ((line_len_pck_q8 + 0x800) >> 8) & ~0xF;
-	}
-
-	/* adjust line_len_pck to nearest divide by mod */
-	bd_index = (ss->mipi.bit_depth - 8) / 2;
-	ss_index = ss->frame.h_subsample;
-	mod = line_length_pck_modulus_lut[bd_index][ss_index];
-	line_len_pck = ((line_len_pck_q8 + (mod << 8) / 2) >> 8) & ~(mod - 1);
-
-	/* Range check line_len_pck */
-	if (line_len_pck > OV8810_MAX_LINE_LENGTH_PCK)
-		line_len_pck = OV8810_MAX_LINE_LENGTH_PCK;
-	else if (line_len_pck < ss->frame.line_len_pck_min)
-		line_len_pck = ss->frame.line_len_pck_min;
-
-	/* recalculate line_time with actual line_len_pck that would be used */
 	line_time_q8 = /* usec's (q8) */
-		((((u32)line_len_pck * 1000) << 8) /
+		((((u32)ss->frame.line_len_pck * 1000) << 8) /
 		(sensor->freq.pclk / 1000) / skip_factor);
 
-	/* Write new line length to sensor */
-	ov8810_write_reg(client, OV8810_LINE_LEN_PCK_H,
-		line_len_pck >> 8);
-	ov8810_write_reg(client, OV8810_LINE_LEN_PCK_L,
-		line_len_pck & 0xFF);
+	frame_length_lines = (((u32)fper->numerator * 1000000 * 256 /
+			       fper->denominator)) / line_time_q8;
+
+	/* Range check frame_length_lines */
+	if (frame_length_lines > OV8810_MAX_FRAME_LENGTH_LINES)
+		frame_length_lines = OV8810_MAX_FRAME_LENGTH_LINES;
+	else if (frame_length_lines < ss->frame.frame_len_lines_min)
+		frame_length_lines = ss->frame.frame_len_lines_min;
+
+	/* Write new frame length to sensor */
+	ov8810_write_reg(client, OV8810_FRM_LEN_LINES_H,
+		frame_length_lines >> 8);
+	ov8810_write_reg(client, OV8810_FRM_LEN_LINES_L,
+		frame_length_lines  & 0xFF);
 
 	/* Save results */
-	ss->frame.line_len_pck = line_len_pck;
+	ss->frame.frame_len_lines = frame_length_lines;
 	sensor->exposure.line_time = line_time_q8;
-
 	/* min_exposure_time = (ss->exposure.fine_int_tm * 1000000 /
 		(sensor->freq.vt_pix_clk)) + 1; */
 	/* use line time for min until LAEC turned on */
@@ -1045,14 +900,15 @@ static int ov8810_set_framerate(struct v4l2_int_device *s,
 		/* Update min/max for query control */
 		lvc->qc.minimum = sensor->exposure.min_exp_time;
 		lvc->qc.maximum = sensor->exposure.fps_max_exp_time;
-		/*ov8810_set_exposure_time(lvc->current_value, s, lvc, isize);*/
+
+		ov8810_set_exposure_time(lvc->current_value, s, lvc, isize);
 	}
 
 	DPRINTK_OV8810("Set Framerate: fper=%d/%d, " \
-		"line_len_pck=%d, fps_max_expT=%dus, " \
+		"frame_len_lines=%d, fps_max_expT=%dus, " \
 		"abs_max_expT=%dus, line_tm=%d/256, " \
 		"skip_factor=%d\n",
-		fper->numerator, fper->denominator, line_len_pck,
+		fper->numerator, fper->denominator, frame_length_lines,
 		sensor->exposure.fps_max_exp_time,
 		sensor->exposure.abs_max_exp_time,
 		line_time_q8, skip_factor);
@@ -1071,7 +927,7 @@ static int ov8810_set_framerate(struct v4l2_int_device *s,
  * returned.
  */
 int ov8810_set_color_bar_mode(u16 enable, struct v4l2_int_device *s,
-						struct private_vcontrol *pvc)
+							struct vcontrol *lvc)
 {
 	int err = 0;
 	struct ov8810_sensor *sensor = s->priv;
@@ -1088,10 +944,10 @@ int ov8810_set_color_bar_mode(u16 enable, struct v4l2_int_device *s,
 	}
 
 	if (err)
-		dev_err(&client->dev, "Error setting color bar mode\n");
+		printk(KERN_ERR "OV8810: Error setting color bar mode\n");
 	else {
-		if (pvc)
-			pvc->current_value = enable;
+		if (lvc)
+			lvc->current_value = enable;
 	}
 
 	return err;
@@ -1112,11 +968,11 @@ int ov8810_strobe_manual_trigger(void)
  */
 int ov8810_set_flash_next_frame(
 			struct ov8810_flash_params *flash_params,
-			struct v4l2_int_device *s, struct private_vcontrol *pvc)
+			struct v4l2_int_device *s, struct vcontrol *lvc)
 {
 	int err = 0, data;
 	struct ov8810_sensor *sensor = s->priv;
-	struct i2c_client *c = sensor->i2c_client;
+	struct i2c_client *client = sensor->i2c_client;
 	u32 strb_pulse_width;
 	u32	line_time_q8 = sensor->exposure.line_time;
 
@@ -1126,95 +982,72 @@ int ov8810_set_flash_next_frame(
 		flash_params->shutter_type,
 		(current_power_state == V4L2_POWER_ON) || sensor->resuming);
 
-	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
-		if (flash_params->flash_time != 0) {
+	if (((current_power_state == V4L2_POWER_ON) || sensor->resuming) &&
+		(flash_params->flash_time != 0)) {
 
-			/* Set strobe source frame type */
-			ov8810_read_reg(c, 1, OV8810_FRS4, &data);
+		/* Set strobe source frame type */
+		ov8810_read_reg(client, 1, OV8810_FRS4, &data);
+		if (flash_params->shutter_type ==
+			ROLLING_SHUTTER_TYPE) {
+			data |= 1 << OV8810_FRS4_STRB_SOURCE_SEL_SHIFT;
+		} else {
+			data &= ~(1 << OV8810_FRS4_STRB_SOURCE_SEL_SHIFT);
+		}
+		err = ov8810_write_reg(client, OV8810_FRS4, data);
 
-			if (flash_params->shutter_type == ROLLING_SHUTTER_TYPE)
-				data |= 1 << OV8810_FRS4_STRB_SOURCE_SEL_SHIFT;
-			else
-				data &=
-				~(1 << OV8810_FRS4_STRB_SOURCE_SEL_SHIFT);
+		DPRINTK_OV8810("set_flash_next_frame:  " \
+			"OV8810_FRS_4=0x%x\n", data);
 
-			err = ov8810_write_reg(c, OV8810_FRS4, data);
+		/* Set Strobe Ctrl Reg */
+		data = 0;
+		if (flash_params->shutter_type ==
+						ROLLING_SHUTTER_TYPE) {
+			data |= 1 <<
+				OV8810_FRS5_ROLLING_SHUT_STRB_EN_SHIFT;
+		}
+		if (flash_params->flash_type == LED_FLASH_TYPE) {
+			data |= 1 <<
+				OV8810_FRS5_STROBE_MODE_SHIFT;
+		}
+
+		strb_pulse_width = (flash_params->flash_time << 8) /
+			line_time_q8;
+
+		if (strb_pulse_width < 1)
+			strb_pulse_width = 1;
+		else if (strb_pulse_width > 4)
+			strb_pulse_width = 4;
+
+		data |= (strb_pulse_width - 1) <<
+			OV8810_FRS5_STRB_PLS_WIDTH_SHIFT;
+
+		err |= ov8810_write_reg(client, OV8810_FRS5, data);
+
+		DPRINTK_OV8810("set_flash_next_frame:  " \
+			"OV8810_FRS_5=0x%x\n", data);
+
+		/* Set Frame Mode Strobe Pulse Width */
+		if (flash_params->shutter_type == MECH_SHUTTER_TYPE) {
+			strb_pulse_width = (flash_params->flash_time << 8) /
+				line_time_q8;
+
+			if (strb_pulse_width > 15)
+				strb_pulse_width = 15;
+
+			err |= ov8810_write_reg(client, OV8810_FRS6,
+				strb_pulse_width);
 
 			DPRINTK_OV8810("set_flash_next_frame:  " \
-				"OV8810_FRS_4=0x%x\n", data);
-
-			/* Set Strobe Ctrl Reg */
-			data = 0;
-			if (flash_params->shutter_type ==
-				ROLLING_SHUTTER_TYPE) {
-				if (flash_params->flash_time != 0) {
-					data |= 1 <<
-					OV8810_FRS5_ROLLING_SHUT_STRB_EN_SHIFT;
-				}
-				if (flash_params->flash_type ==
-					LED_FLASH_TYPE) {
-					/* use LED3 Mode */
-					data |= 3 <<
-						OV8810_FRS5_STROBE_MODE_SHIFT;
-				}
-
-				strb_pulse_width =
-					(flash_params->flash_time << 8) /
-					line_time_q8;
-				if (strb_pulse_width < 1)
-					strb_pulse_width = 1;
-				else if (strb_pulse_width > 4)
-					strb_pulse_width = 4;
-
-				data |= (strb_pulse_width - 1) <<
-					OV8810_FRS5_STRB_PLS_WIDTH_SHIFT;
-			}
-
-			err |= ov8810_write_reg(c, OV8810_FRS5, data);
-
-			DPRINTK_OV8810("%s: OV8810_FRS_5=0x%x\n",
-				__func__, data);
-
-			/* Set Frame Mode Strobe Pulse Width */
-			if (flash_params->shutter_type == MECH_SHUTTER_TYPE) {
-				if (flash_params->flash_type ==
-				    XENON_FLASH_TYPE) {
-					strb_pulse_width =
-					    (flash_params->flash_time << 8) /
-					    line_time_q8;
-
-					if (strb_pulse_width > 15)
-						strb_pulse_width = 15;
-
-					err |= ov8810_write_reg(c, OV8810_FRS6,
-						strb_pulse_width);
-
-					DPRINTK_OV8810("%s: " \
-						"OV8810_FRS_6=0x%x\n",
-						__func__, strb_pulse_width);
-				} else {
-					err = -EINVAL;
-					dev_err(&c->dev, "OV8810 does not " \
-						"support LED mode with " \
-						"Mechanical Shutter\n");
-				}
-			}
-
-			/* Auto reset */
-			flash_params->flash_time = 0;
-
-		} else {
-			/* Disable Strobe Control */
-			err |= ov8810_write_reg(c, OV8810_FRS5, 0);
-			err |= ov8810_write_reg(c, OV8810_FRS6, 0x38);
-
-			DPRINTK_OV8810("%s: OV8810_FRS_5=0x00\n", __func__);
-			DPRINTK_OV8810("%s: OV8810_FRS_6=0x38\n", __func__);
+				"OV8810_FRS_6=0x%x\n",
+				strb_pulse_width);
 		}
+
+		/* Auto reset */
+		flash_params->flash_time = 0;
 	}
 
 	if (err)
-		dev_err(&c->dev, "Error setting flash register\n");
+		printk(KERN_ERR  "OV8810: Error setting flash register\n");
 	else {
 		sensor->flash.flash_time = flash_params->flash_time;
 		sensor->flash.flash_type = flash_params->flash_type;
@@ -1227,7 +1060,7 @@ int ov8810_set_flash_next_frame(
  * Sets the sensor orientation.
  */
 static int ov8810_set_orientation(enum ov8810_orientation val,
-			struct v4l2_int_device *s, struct private_vcontrol *pvc)
+			struct v4l2_int_device *s, struct vcontrol *lvc)
 {
 	int err = 0;
 	u32 data;
@@ -1268,11 +1101,10 @@ static int ov8810_set_orientation(enum ov8810_orientation val,
 	}
 
 	if (err) {
-		dev_err(&client->dev, "OV8810: Error setting orientation.%d",
-			err);
+		printk(KERN_ERR "OV8810: Error setting orientation.%d", err);
 		return err;
 	} else {
-		pvc->current_value = (u32)val;
+		lvc->current_value = (u32)val;
 		sensor->orientation = val;
 	}
 
@@ -1290,9 +1122,10 @@ static int ov8810_set_orientation(enum ov8810_orientation val,
  */
 int ov8810_start_mech_shutter_capture(
 			struct ov8810_shutter_params *shutter_params,
-			struct v4l2_int_device *s, struct private_vcontrol *pvc)
+			struct v4l2_int_device *s, struct vcontrol *lvc)
 {
 	u16 Tr_lines = 1, Tfrex_lines, shutter_dly_lines, frame_len_lines_adj;
+	u16 data = 0;
 	int err = -EINVAL;
 	int adjusted_exp_time;
 	struct ov8810_sensor *sensor = s->priv;
@@ -1306,14 +1139,14 @@ int ov8810_start_mech_shutter_capture(
 		(current_power_state == V4L2_POWER_ON) || sensor->resuming);
 
 	if (sensor->streaming == false) {
-		DPRINTK_OV8810("Error: Sensor must be streaming to " \
+		printk(KERN_ERR "OV8810: Error: Sensor must be streaming to " \
 			"start mech shutter capture.\n");
 		return err;
 	}
 
 	if ((shutter_params->type != MECH_SHUTTER_TYPE) ||
 			(shutter_params->exp_time == 0)) {
-		DPRINTK_OV8810("Error: Invalid shutter params.\n");
+		printk(KERN_ERR "OV8810: Error: Invalid shutter params.\n");
 		return err;
 	}
 
@@ -1323,18 +1156,8 @@ int ov8810_start_mech_shutter_capture(
 	/* Calc Tfrex time */
 	adjusted_exp_time = shutter_params->exp_time -
 		shutter_params->delay_time;
-
-	/* Limit check exposure time */
 	if (adjusted_exp_time < 0)
 		adjusted_exp_time = 0;
-
-	if (adjusted_exp_time > sensor->exposure.abs_max_exp_time) {
-		dev_err(&client->dev, "OV8810: Exposure time %dus is " \
-			"greater than legal limit %dus\n",
-			adjusted_exp_time, sensor->exposure.abs_max_exp_time);
-
-		adjusted_exp_time = sensor->exposure.fps_max_exp_time;
-	}
 
 	/* Convert Tfrex time to lines (with rounding) */
 	Tfrex_lines = (((adjusted_exp_time << 8) +
@@ -1353,10 +1176,18 @@ int ov8810_start_mech_shutter_capture(
 	 * start FREX capture & MIPI output simultaneously
 	 */
 	/* enable group latch */
-	err |= ov8810_write_reg(client, OV8810_FRS0, 0x8C);
+	err |= ov8810_write_reg(client, OV8810_FRS0, 0x88);
 
 	/* turn on MIPI output */
-	err |= ov8810_write_reg(client, OV8810_MIPI_CTRL0B, 0x0C);
+	if (ss->mipi.num_data_lanes == 2)
+		data = 0;
+	else if (ss->mipi.num_data_lanes == 1)
+		data = OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK;
+	else
+		data = OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_1_MASK |
+			OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK;
+
+	err |= ov8810_write_reg(client, OV8810_MIPI_CTRL0B, 0x0C | data);
 
 	/* adjust frame length to delay readout */
 	frame_len_lines_adj = ss->frame.frame_len_lines + shutter_dly_lines;
@@ -1370,10 +1201,9 @@ int ov8810_start_mech_shutter_capture(
 	err |= ov8810_write_reg(client, OV8810_FRS7, 0x01);
 
 	/* disable group latch */
-	err |= ov8810_write_reg(client, OV8810_FRS0, 0x84);
+	err |= ov8810_write_reg(client, OV8810_FRS0, 0x80);
 
 	/* trigger group latch in the coming V-blank */
-	err |= ov8810_write_reg(client, OV8810_GROUP_WR, 0xFF);
 	err |= ov8810_write_reg(client, OV8810_GROUP_WR, 0xFF);
 
 	DPRINTK_OV8810("start_mech_shutter_capture:  " \
@@ -1385,7 +1215,7 @@ int ov8810_start_mech_shutter_capture(
 		shutter_dly_lines, frame_len_lines_adj);
 
 	if (err)
-		dev_err(&client->dev, "Error setting mech shutter registers\n");
+		printk(KERN_ERR "OV8810: Error setting mech shutter registers\n");
 
 	return err;
 }
@@ -1415,11 +1245,12 @@ static int ov8810_calc_pclk(struct v4l2_int_device *s,
 
 	DPRINTK_OV8810("ov8810_calc_pclk: vt_sys_div=%d, div8=%d, " \
 		"op_sys_div=%d, op_pix_div=%d, pll_mult=%d, pll_pre_div=%d, " \
-		"rp_clk_div=%d, sclk=%d, pclk=%d\n",
+		"rp_clk_div=%d, sclk=%d, pclk=%d, # lanes=%d\n",
 		ss->clk.vt_sys_div, ss->clk.div8,
 		ss->clk.op_sys_div, ss->clk.op_pix_div,
 		ss->clk.pll_mult, ss->clk.pll_pre_div,
-		ss->clk.rp_clk_div, sensor->freq.sclk, sensor->freq.pclk);
+		ss->clk.rp_clk_div, sensor->freq.sclk, sensor->freq.pclk,
+		ss->mipi.num_data_lanes);
 	return 0;
 }
 
@@ -1427,7 +1258,7 @@ static int ov8810_calc_pclk(struct v4l2_int_device *s,
  * Set Lens Correction
  */
 static int ov8810_set_lens_correction(u16 enable_lens_correction,
-	struct v4l2_int_device *s, struct private_vcontrol *pvc,
+	struct v4l2_int_device *s, struct vcontrol *lvc,
 	enum image_size_ov isize)
 {
 	u8 lenc_downsampling;
@@ -1442,11 +1273,11 @@ static int ov8810_set_lens_correction(u16 enable_lens_correction,
 			   mode only !!!*/
 			sensor->pdata->lock_cpufreq(CPU_CLK_LOCK);
 
-			/* enable lens correction */
 			err = ov8810_write_regs(client, len_correction_tbl);
+			/* enable 0x3300[4] */
 			err |= ov8810_read_reg(client, 1,
 				OV8810_ISP_ENBL_0, &data);
-			data |= 1 << OV8810_ISP_ENBL_0_LENC_EN_SHIFT;
+			data |= 0x10;
 			err |= ov8810_write_reg(client,
 				OV8810_ISP_ENBL_0, data);
 
@@ -1469,359 +1300,18 @@ static int ov8810_set_lens_correction(u16 enable_lens_correction,
 		} else {  /* disable lens correction */
 			err = ov8810_read_reg(client, 1,
 				OV8810_ISP_ENBL_0, &data);
-			data &= ~(1 << OV8810_ISP_ENBL_0_LENC_EN_SHIFT);
+			data &= 0xef;
 			err |= ov8810_write_reg(client,
 				OV8810_ISP_ENBL_0, data);
 		}
 	}
 
 	if (err)
-		dev_err(&client->dev, "Error setting lens correction=%d.\n",
+		printk(KERN_ERR "OV8810: Error setting lens correction=%d.\n",
 			enable_lens_correction);
 	else {
-		if (pvc)
-			pvc->current_value = enable_lens_correction;
-	}
-
-	return err;
-}
-
-/*
- * Set Defect Pixel Correction
- */
-static int ov8810_set_defect_pixel_correction(u16 enbl_defect_pixel_corr,
-	struct v4l2_int_device *s, struct private_vcontrol *pvc)
-{
-	int data, err = 0;
-	struct ov8810_sensor *sensor = s->priv;
-	struct i2c_client *client = sensor->i2c_client;
-
-	DPRINTK_OV8810("setting defect pixel correction=%d, power=%d\n",
-		enbl_defect_pixel_corr,
-		(current_power_state == V4L2_POWER_ON) || sensor->resuming);
-
-	if ((current_power_state == V4L2_POWER_ON) || sensor->resuming) {
-		err |= ov8810_read_reg(client, 1,
-			OV8810_ISP_ENBL_0, &data);
-		if (enbl_defect_pixel_corr) {
-			/* enable defect correction */
-			data |= ((1 << OV8810_ISP_ENBL_0_BC_EN_SHIFT) |
-				(1 << OV8810_ISP_ENBL_0_WC_EN_SHIFT));
-		} else {
-			/* disable defect correction */
-			data &= ~((1 << OV8810_ISP_ENBL_0_BC_EN_SHIFT) |
-				(1 << OV8810_ISP_ENBL_0_WC_EN_SHIFT));
-		}
-		err |= ov8810_write_reg(client,
-			OV8810_ISP_ENBL_0, data);
-
-		DPRINTK_OV8810("%s: Setting OV8810_ISP_ENBL_0=0x%x\n",
-			__func__, data);
-	}
-
-	if (err)
-		dev_err(&client->dev, "Error setting defect pixel corr=%d.\n",
-			enbl_defect_pixel_corr);
-	else {
-		if (pvc)
-			pvc->current_value = enbl_defect_pixel_corr;
-	}
-
-	return err;
-}
-
-static int ov8810_param_handler(u32 ctrlval,
-			struct v4l2_int_device *s)
-{
-	int err = 0;
-	struct ov8810_sensor *sensor = s->priv;
-	struct i2c_client *c = to_i2c_client(sensor->dev);
-	struct ov8810_sensor_params sensor_params;
-	struct ov8810_sensor_regif sensor_reg;
-	struct ov8810_flash_params flash_params;
-	struct ov8810_sensor_settings *ss = &sensor_settings[sensor->isize];
-
-	struct camera_params_control camctl;
-	struct private_vcontrol *pvc;
-	int i;
-
-	if (!ctrlval)
-		return -EINVAL;
-
-	if (copy_from_user(&camctl, (void *)ctrlval,
-			sizeof(struct camera_params_control))) {
-		dev_err(&c->dev, "ov8810: Failed copy_from_user\n");
-		return -EINVAL;
-	}
-
-	i = find_vctrl_private(camctl.op);
-	if (i < 0)
-		return -EINVAL;
-	pvc = &video_control_private[i];
-
-	if (camctl.xaction == IOCTL_RD) {
-		switch (camctl.op) {
-		case SENSOR_REG_REQ:
-			if ((current_power_state != V4L2_POWER_ON) &&
-				!sensor->resuming) {
-				dev_err(&c->dev, "OV8810: I2C Read Err: " \
-					"Power Off\n");
-				err = -EINVAL;
-				break;
-			}
-			if (copy_from_user(&sensor_reg,
-				(struct ov8810_sensor_regif *)camctl.data_in,
-				sizeof(struct ov8810_sensor_regif)) == 0) {
-				err =  ov8810_read_reg(c, sensor_reg.len,
-				sensor_reg.addr, &sensor_reg.val);
-				/*DPRINTK_OV8810("SENSOR_REG_REQ IOCTL read-" \
-				"%d: 0x%x=0x%x\n", sensor_reg.len,
-				sensor_reg.addr, sensor_reg.val);*/
-			}
-			if (copy_to_user((void *)camctl.data_in, &(sensor_reg),
-				sizeof(sensor_reg))) {
-				dev_err(&c->dev, "ov8810: Copy_to_user err\n");
-				return -EINVAL;
-			}
-			break;
-		case SENSOR_ID_REQ:
-			if (sizeof(sensor->sensor_id) > camctl.data_in_size) {
-				dev_err(&c->dev,
-					"V4L2_CID_PRIVATE_S_PARAMS IOCTL " \
-					"DATA SIZE ERROR: src=%d dst=%d\n",
-					sizeof(sensor->sensor_id),
-					camctl.data_in_size);
-				err = -EINVAL;
-				break;
-			}
-
-			if (copy_to_user((void *)camctl.data_in,
-					&(sensor->sensor_id),
-					sizeof(sensor->sensor_id))) {
-				dev_err(&c->dev, "ov8810: Copy_to_user err\n");
-				err = -EINVAL;
-			}
-			break;
-		case COLOR_BAR:
-			camctl.data_in = pvc->current_value;
-			if (copy_to_user((void *)ctrlval, &camctl,
-					sizeof(struct camera_params_control))) {
-				dev_err(&c->dev, "ov8810: Copy_to_user err\n");
-				err = -EINVAL;
-			}
-			break;
-		case FLASH_NEXT_FRAME:
-			if (sizeof(sensor->flash) > camctl.data_in_size) {
-				dev_err(&c->dev,
-					"V4L2_CID_PRIVATE_S_PARAMS IOCTL " \
-					"DATA SIZE ERROR: src=%d dst=%d\n",
-					sizeof(sensor->flash),
-					camctl.data_in_size);
-				err = -EINVAL;
-				break;
-			}
-
-			if (copy_to_user((void *)camctl.data_in,
-					&(sensor->flash),
-					sizeof(sensor->flash))) {
-				dev_err(&c->dev, "ov8810: Copy_to_user err\n");
-				err = -EINVAL;
-			}
-			break;
-		case ORIENTATION:
-			camctl.data_in = pvc->current_value;
-			if (copy_to_user((void *)ctrlval, &camctl,
-					sizeof(struct camera_params_control))) {
-				dev_err(&c->dev, "ov8810: Copy_to_user err\n");
-				err = -EINVAL;
-			}
-			break;
-		case LENS_CORRECTION:
-			camctl.data_in = pvc->current_value;
-			if (copy_to_user((void *)ctrlval, &camctl,
-					sizeof(struct camera_params_control))) {
-				dev_err(&c->dev, "ov8810: Copy_to_user err\n");
-				err = -EINVAL;
-			}
-			break;
-		case SENSOR_PARAMS_REQ:
-			sensor_params.line_time = sensor->exposure.line_time;
-			sensor_params.gain_frame_delay =
-				OV8810_GAIN_FRAME_DELAY;
-			sensor_params.exp_time_frame_delay =
-			OV8810_EXP_TIME_FRAME_DELAY;
-			sensor_params.frame_length_lines =
-				ss->frame.frame_len_lines;
-			sensor_params.line_length_clocks =
-				ss->frame.line_len_pck;
-			sensor_params.x_output_size =
-				ss->frame.x_output_size;
-			sensor_params.y_output_size =
-				ss->frame.y_output_size;
-			sensor_params.binning_sensitivity =
-				ss->frame.binning_sensitivity;
-
-			if (sizeof(sensor_params) >
-					camctl.data_in_size) {
-				dev_err(&c->dev,
-					"V4L2_CID_PRIVATE_S_PARAMS IOCTL " \
-					"DATA SIZE ERROR: src=%d dst=%d\n",
-					sizeof(sensor_params),
-					camctl.data_in_size);
-				err = -EINVAL;
-				break;
-			}
-
-			if (copy_to_user((void *)camctl.data_in,
-					 &(sensor_params),
-					 sizeof(sensor_params))) {
-				dev_err(&c->dev, "ov8810: Copy_to_user err\n");
-				err = -EINVAL;
-			}
-			break;
-		case SET_SHUTTER_PARAMS:
-			if (copy_to_user((void *)camctl.data_in,
-				&(sensor->shutter),
-				sizeof(sensor->shutter))) {
-				err = -EINVAL;
-				dev_err(&c->dev, "ov8810: Copy_to_user err\n");
-			}
-		break;
-		case DEFECT_PIXEL_CORRECTION:
-			camctl.data_in = pvc->current_value;
-			if (copy_to_user((void *)ctrlval, &camctl,
-					sizeof(struct camera_params_control))) {
-				dev_err(&c->dev, "ov8810: Copy_to_user err\n");
-				err = -EINVAL;
-			}
-			break;
-		case FLICKER_DETECT_REQ:
-			err =  ov8810_read_reg(c, 1, OV8810_5060HZ_CTRL,
-				&sensor_reg.val);
-			sensor_reg.val &= OV8810_5060HZ_CTRL_BAND50_MASK;
-			DPRINTK_OV8810("FLICKER_DETECT_REQ IOCTL read-" \
-				"0x%x=0x%x\n", OV8810_5060HZ_CTRL,
-				sensor_reg.val);
-			if (copy_to_user((void *)camctl.data_in,
-				&sensor_reg.val, sizeof(sensor_reg.val))) {
-				dev_err(&c->dev, "ov8810: Copy_to_user err\n");
-				err = -EINVAL;
-			}
-			break;
-		default:
-			dev_err(&c->dev, "Unrecognized op %d\n",
-				camctl.op);
-			err = -EINVAL;
-			break;
-		}
-	} else if (camctl.xaction == IOCTL_WR) {
-		switch (camctl.op) {
-		case SENSOR_REG_REQ:
-			if ((current_power_state != V4L2_POWER_ON) &&
-				!sensor->resuming) {
-				dev_err(&c->dev, "OV8810: Reg Write Err: " \
-					"Power Off\n");
-				err = -EINVAL;
-				break;
-			}
-			if (copy_from_user(&sensor_reg,
-				(struct ov8810_sensor_regif *)camctl.data_out,
-				sizeof(struct ov8810_sensor_regif)) == 0) {
-
-				/* ov8810_write_reg only supports 1-byte wrts */
-				DPRINTK_OV8810("SENSOR_REG_REQ IOCTL write-" \
-					"%d: 0x%x=0x%x\n", sensor_reg.len,
-				sensor_reg.addr, sensor_reg.val);
-			if (sensor_reg.len == 1) {
-				err = ov8810_write_reg(c, sensor_reg.addr,
-					sensor_reg.val);
-			} else if (sensor_reg.len == 2) {
-				err = ov8810_write_reg(c, sensor_reg.addr,
-				(sensor_reg.val & 0xff00) >> 8);
-				err |= ov8810_write_reg(c, sensor_reg.addr + 1,
-				sensor_reg.val & 0xff);
-			} else if (sensor_reg.len == 4) {
-				err = ov8810_write_reg(c, sensor_reg.addr,
-					(sensor_reg.val & 0xff000000) >> 24);
-				err |= ov8810_write_reg(c, sensor_reg.addr + 1,
-					(sensor_reg.val & 0xff0000) >> 16);
-				err |= ov8810_write_reg(c, sensor_reg.addr + 2,
-					(sensor_reg.val & 0xff00) >> 8);
-				err |= ov8810_write_reg(c, sensor_reg.addr + 3,
-					sensor_reg.val & 0xff);
-			} else
-				dev_err(&c->dev, "Error: SENSOR_REG_REQ " \
-					"IOCTL length must = 1, 2, or 4\n");
-				err = -EINVAL;
-			}
-			break;
-		case COLOR_BAR:
-			err = ov8810_set_color_bar_mode(camctl.data_out,
-				s, pvc);
-		case FLASH_NEXT_FRAME:
-			if (sizeof(flash_params) < camctl.data_out_size) {
-				dev_err(&c->dev,
-					"V4L2_CID_PRIVATE_S_PARAMS IOCTL " \
-					"DATA SIZE ERROR: src=%d dst=%d\n",
-					camctl.data_out_size,
-					sizeof(flash_params));
-				err = -EINVAL;
-				break;
-			}
-
-			if (copy_from_user(&flash_params,
-				(struct ov8810_flash_params *)camctl.data_out,
-				sizeof(struct ov8810_flash_params)) == 0) {
-				err = ov8810_set_flash_next_frame(&flash_params,
-					s, pvc);
-			}
-			break;
-		case ORIENTATION:
-			err = ov8810_set_orientation(camctl.data_out,
-				s, pvc);
-			break;
-		case LENS_CORRECTION:
-			err = ov8810_set_lens_correction(camctl.data_out, s,
-				pvc, sensor->isize);
-			break;
-		case START_MECH_SHUTTER_CAPTURE:
-			err = ov8810_start_mech_shutter_capture(
-				&(sensor->shutter), s, pvc);
-			break;
-		case SET_SHUTTER_PARAMS:
-			if (sizeof(sensor->shutter) < camctl.data_out_size) {
-				dev_err(&c->dev,
-					"V4L2_CID_PRIVATE_S_PARAMS IOCTL " \
-					"DATA SIZE ERROR: src=%d dst=%d\n",
-					camctl.data_out_size,
-					sizeof(sensor->shutter));
-				err = -EINVAL;
-				break;
-			}
-
-			err = copy_from_user(&(sensor->shutter),
-				(struct ov8810_shutter_params *)camctl.data_out,
-				sizeof(struct ov8810_shutter_params));
-			DPRINTK_OV8810("SHUTTER_PARAMS IOCTL write-" \
-				"exp_time=%d, delay_time=%d, type=%d\n",
-				sensor->shutter.exp_time,
-				sensor->shutter.delay_time,
-				sensor->shutter.type);
-			break;
-		case DEFECT_PIXEL_CORRECTION:
-			err = ov8810_set_defect_pixel_correction(
-				camctl.data_out, s, pvc);
-			break;
-		default:
-			dev_err(&c->dev, "Unrecognized op %d\n",
-				camctl.op);
-			err = -EINVAL;
-			break;
-		}
-	} else {
-		dev_err(&c->dev, "Unrecognized action %d\n",
-			camctl.xaction);
-		err = -EINVAL;
+		if (lvc)
+			lvc->current_value = enable_lens_correction;
 	}
 
 	return err;
@@ -1853,7 +1343,7 @@ ov8810_find_size(struct v4l2_int_device *s, unsigned int width,
 	else
 		size = SIZE_125K;
 
-	DPRINTK_OV8810("ov8810_find_size: Req Width=%d, "
+	DPRINTK_OV8810("find_size: Req Width=%d, "
 			"Find Size=%dx%d\n",
 			width, (int)ov8810_sizes[size].width,
 			(int)ov8810_sizes[size].height);
@@ -1882,7 +1372,7 @@ static u32 ov8810_calc_mipiclk(struct v4l2_int_device *s,
 	sensor->freq.mipiclk = (sensor->freq.xclk * ss->clk.pll_mult) /
 		(ss->clk.pll_pre_div * ss->clk.op_sys_div);
 
-	DPRINTK_OV8810("ov8810: mipiclk=%u  pre_divider=%u  " \
+	DPRINTK_OV8810("mipiclk=%u  pre_divider=%u  " \
 		"multiplier=%u  op_sys_div=%u\n",
 		sensor->freq.mipiclk, ss->clk.pll_pre_div,
 		ss->clk.pll_mult, ss->clk.op_sys_div);
@@ -1985,8 +1475,10 @@ int ov8810_configure_frame(struct v4l2_int_device *s,
 		 (lut[ss->frame.h_subsample] &
 		 OV8810_IMAGE_TRANSFORM_HSUB_MASK);
 
-	DPRINTK_OV8810("ov8810_configure_frame: sensor->orientation = %d\n",
-		sensor->orientation);
+/*
+printk("ov8810_configure_frame: sensor->orientation = %d\n",
+	sensor->orientation);
+*/
 
 /*
 	switch (sensor->orientation) {
@@ -2025,9 +1517,8 @@ int ov8810_configure_frame(struct v4l2_int_device *s,
  */
 static int ov8810_configure(struct v4l2_int_device *s)
 {
-	bool use_50_60_hz_detect;
 	enum image_size_ov isize;
-	u16 index;
+	u16 data = 0;
 	int err = 0, i = 0;
 	u32 mipiclk;
 	enum pixel_format_ov pfmt = RAW10;
@@ -2035,20 +1526,6 @@ static int ov8810_configure(struct v4l2_int_device *s)
 	struct v4l2_pix_format *pix = &sensor->pix;
 	struct i2c_client *client = sensor->i2c_client;
 	struct vcontrol *lvc = NULL;
-	struct private_vcontrol *pvc = NULL;
-
-	isize = ov8810_find_size(s, pix->width, pix->height);
-
-	DPRINTK_OV8810("ov8810_configure: isize=%d, Req Size=%dx%d, " \
-		"Find Size = %dx%d, fps=%d/%d\n", \
-		isize, pix->width, pix->height,
-		(int)ov8810_sizes[isize].width,
-		(int)ov8810_sizes[isize].height,
-		sensor->timeperframe.denominator,
-		sensor->timeperframe.numerator);
-
-	/* enable 50-60 hz detect for preview modes only */
-	use_50_60_hz_detect = (isize != SIZE_8M);
 
 	switch (pix->pixelformat) {
 
@@ -2064,19 +1541,22 @@ static int ov8810_configure(struct v4l2_int_device *s)
 	isp_csi2_ctx_config_virtual_id(0, OV8810_CSI2_VIRTUAL_ID);
 	isp_csi2_ctx_update(0, false);
 
+	isize = ov8810_find_size(s, pix->width, pix->height);
+
+	printk(KERN_INFO "ov8810_configure: isize=%d, Req Size=%dx%d, " \
+		"Find Size = %dx%d, fps=%d/%d\n", \
+		isize, pix->width, pix->height,
+		(int)ov8810_sizes[isize].width,
+		(int)ov8810_sizes[isize].height,
+		sensor->timeperframe.denominator,
+		sensor->timeperframe.numerator);
+
 	/* Reset */
 	isp_csi2_ctrl_config_if_enable(false);
 	isp_csi2_ctrl_update(false);
 
 	ov8810_write_reg(client, OV8810_SYS, 0x80);
 	mdelay(5);
-
-	/* For Mechanical Shutter, let sensor continue streaming here so
-	   registers can be loaded in parallel with dummy frame time */
-	if (sensor->shutter.type != MECH_SHUTTER_TYPE) {
-		/* Put Sensor in Standby */
-		ov8810_write_reg(client, OV8810_IMAGE_SYSTEM, 0x00);
-	}
 
 	/* Set CSI2 common register settings */
 	err = ov8810_write_regs(client, ov8810_common_csi2);
@@ -2097,16 +1577,10 @@ static int ov8810_configure(struct v4l2_int_device *s)
 		return err;
 
 	/* Turn on 50-60 Hz Detection */
-	if (use_50_60_hz_detect) {
+	if (isize != SIZE_8M) {
 		err = ov8810_write_regs(client, ov8810_50_60_hz_detect_tbl);
 		if (err)
 			return err;
-	}
-
-	/* Load LDO = 1.6V Settings */
-	if (use_ldo_1_6v_change) {
-		index = use_50_60_hz_detect ? 1 : 0;
-		err = ov8810_write_regs(client, ov8810_ldo_1_6v[index]);
 	}
 
 	/* Set Shutter related register settings */
@@ -2118,7 +1592,15 @@ static int ov8810_configure(struct v4l2_int_device *s)
 			return err;
 	} else {
 		/* Enable MIPI output */
-		err = ov8810_write_reg(client, OV8810_MIPI_CTRL0B, 0x0c);
+		if (sensor_settings[isize].mipi.num_data_lanes == 2)
+			data = 0;
+		else if (sensor_settings[isize].mipi.num_data_lanes == 1)
+			data = OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK;
+		else
+			data = OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_1_MASK |
+				OV8810_MIPI_CTRL0B_DSBL_DATA_LANE_2_MASK;
+
+		err = ov8810_write_reg(client, OV8810_MIPI_CTRL0B, 0x0c | data);
 		if (err)
 			return err;
 	}
@@ -2159,13 +1641,15 @@ static int ov8810_configure(struct v4l2_int_device *s)
 
 	mipiclk = ov8810_calc_mipiclk(s, isize);
 
-	DPRINTK_OV8810("OV8810: mipiclk = %d, hs_settle = %d\n",
-		mipiclk, sensor_settings[isize].mipi.hs_settle);
+	DPRINTK_OV8810("mipiclk = %d, lbound_hs_settle = %d, " \
+		"ubound_hs_settle = %d \n", mipiclk,
+		sensor_settings[isize].mipi.hs_settle_lower,
+		sensor_settings[isize].mipi.hs_settle_upper);
 
 	/* Send settings to ISP-CSI2 Receiver PHY */
 	isp_csi2_calc_phy_cfg0(mipiclk,
-		sensor_settings[isize].mipi.hs_settle,
-		sensor_settings[isize].mipi.hs_settle);
+		sensor_settings[isize].mipi.hs_settle_lower,
+		sensor_settings[isize].mipi.hs_settle_upper);
 
 	/* Set sensors virtual channel*/
 	ov8810_set_virtual_id(client, OV8810_CSI2_VIRTUAL_ID);
@@ -2191,34 +1675,27 @@ static int ov8810_configure(struct v4l2_int_device *s)
 
 	if (pix->pixelformat != V4L2_PIX_FMT_W1S_PATT) {
 		/* Set initial color bars */
-		i = find_vctrl_private(COLOR_BAR);
+		i = find_vctrl(V4L2_CID_PRIVATE_COLOR_BAR);
 		if (i >= 0) {
-			pvc = &video_control_private[i];
-			ov8810_set_color_bar_mode(pvc->current_value,
-				sensor->v4l2_int_device, pvc);
+			lvc = &video_control[i];
+			ov8810_set_color_bar_mode(lvc->current_value,
+				sensor->v4l2_int_device, lvc);
 		}
 	}
 
 	/* Set initial flash mode */
-	i = find_vctrl_private(FLASH_NEXT_FRAME);
+	i = find_vctrl(V4L2_CID_PRIVATE_FLASH_NEXT_FRAME);
 	if (i >= 0) {
-		pvc = &video_control_private[i];
+		lvc = &video_control[i];
 		ov8810_set_flash_next_frame(&(sensor->flash),
-			sensor->v4l2_int_device, pvc);
+			sensor->v4l2_int_device, lvc);
 	}
 
-	i = find_vctrl_private(LENS_CORRECTION);
+	i = find_vctrl(V4L2_CID_PRIVATE_LENS_CORRECTION);
 	if (i >= 0) {
-		pvc = &video_control_private[i];
-		ov8810_set_lens_correction(pvc->current_value,
-			sensor->v4l2_int_device, pvc, isize);
-	}
-
-	i = find_vctrl_private(DEFECT_PIXEL_CORRECTION);
-	if (i >= 0) {
-		pvc = &video_control_private[i];
-		ov8810_set_defect_pixel_correction(pvc->current_value,
-			sensor->v4l2_int_device, pvc);
+		lvc = &video_control[i];
+		ov8810_set_lens_correction(lvc->current_value,
+			sensor->v4l2_int_device, lvc, isize);
 	}
 
 	/* start streaming */
@@ -2254,7 +1731,7 @@ static int ov8810_detect(struct v4l2_int_device *s)
 
 	/* Check ID & max supported rev */
 	if (pid == OV8810_PID) {
-		DPRINTK_OV8810("OV8810: Detect success " \
+		DPRINTK_OV8810("Detect success " \
 			"(pid=0x%x rev=0x%x\n", pid, rev);
 
 		sensor_id->model = pid;
@@ -2265,7 +1742,7 @@ static int ov8810_detect(struct v4l2_int_device *s)
 		/* We didn't read the values we expected, so
 		 * this must not be an OV8810.
 		 */
-		dev_warn(&client->dev, "OV8810: pid mismatch 0x%x rev 0x%x\n",
+		printk(KERN_ERR "OV8810: pid mismatch 0x%x rev 0x%x\n",
 			pid, rev);
 
 		return -ENODEV;
@@ -2310,8 +1787,12 @@ static int ioctl_queryctrl(struct v4l2_int_device *s,
 static int ioctl_g_ctrl(struct v4l2_int_device *s,
 			     struct v4l2_control *vc)
 {
+	int i, retval = 0;
+	struct ov8810_sensor *sensor = s->priv;
+	struct i2c_client *client = sensor->i2c_client;
 	struct vcontrol *lvc;
-	int i;
+	struct  ov8810_sensor_params sensor_params;
+	struct ov8810_sensor_regif sensor_reg;
 
 	i = find_vctrl(vc->id);
 	if (i < 0)
@@ -2325,9 +1806,70 @@ static int ioctl_g_ctrl(struct v4l2_int_device *s,
 	case V4L2_CID_GAIN:
 		vc->value = lvc->current_value;
 		break;
-    }
-
-	return 0;
+	case V4L2_CID_PRIVATE_COLOR_BAR:
+		vc->value = lvc->current_value;
+		break;
+	case V4L2_CID_PRIVATE_FLASH_NEXT_FRAME:
+		if (copy_to_user((void *)vc->value, &(sensor->flash),
+				sizeof(sensor->flash))) {
+			retval = -EINVAL;
+			printk(KERN_ERR "OV8810: Failed copy_to_user\n");
+		}
+		break;
+	case V4L2_CID_PRIVATE_ORIENTATION:
+		vc->value = lvc->current_value;
+		break;
+	case V4L2_CID_PRIVATE_LENS_CORRECTION:
+		vc->value = lvc->current_value;
+		break;
+	case V4L2_CID_PRIVATE_SHUTTER_PARAMS:
+		if (copy_to_user((void *)vc->value, &(sensor->shutter),
+				sizeof(sensor->shutter))) {
+			retval = -EINVAL;
+			printk(KERN_ERR "OV8810: Failed copy_to_user\n");
+		}
+		break;
+	case V4L2_CID_PRIVATE_SENSOR_ID_REQ:
+		if (copy_to_user((void *)vc->value, &(sensor->sensor_id),
+				sizeof(sensor->sensor_id))) {
+			retval = -EINVAL;
+			printk(KERN_ERR "OV8810: Failed copy_to_user\n");
+		}
+		break;
+	case V4L2_CID_PRIVATE_SENSOR_REG_REQ:
+		if ((current_power_state != V4L2_POWER_ON) &&
+			!sensor->resuming) {
+			printk(KERN_ERR "OV8810: I2C Read Err: Power Off\n");
+			return -EINVAL;
+		}
+		if (copy_from_user(&sensor_reg,
+			(struct ov8810_sensor_regif *)vc->value,
+			sizeof(struct ov8810_sensor_regif)) == 0) {
+			retval =  ov8810_read_reg(client, sensor_reg.len,
+				sensor_reg.addr, &sensor_reg.val);
+			DPRINTK_OV8810("SENSOR_REG_REQ IOCTL read-" \
+				"%d: 0x%x=0x%x\n", sensor_reg.len,
+				sensor_reg.addr, sensor_reg.val);
+		}
+		if (copy_to_user((void *)vc->value, &(sensor_reg),
+				sizeof(sensor_reg))) {
+			printk(KERN_ERR "OV8810: Failed copy_to_user\n");
+			return -EINVAL;
+		}
+		break;
+	case V4L2_CID_PRIVATE_SENSOR_PARAMS_REQ:
+		sensor_params.line_time = sensor->exposure.line_time;
+		sensor_params.gain_frame_delay = OV8810_GAIN_FRAME_DELAY;
+		sensor_params.exp_time_frame_delay =
+			OV8810_EXP_TIME_FRAME_DELAY;
+		if (copy_to_user((void *)vc->value, &(sensor_params),
+				sizeof(sensor_params))) {
+			printk(KERN_ERR "OV8810: Failed copy_to_user\n");
+			return -EINVAL;
+		}
+		break;
+	}
+	return retval;
 }
 
 /*
@@ -2342,32 +1884,107 @@ static int ioctl_g_ctrl(struct v4l2_int_device *s,
 static int ioctl_s_ctrl(struct v4l2_int_device *s,
 			     struct v4l2_control *vc)
 {
-	struct ov8810_sensor *sensor = s->priv;
-	struct vcontrol *lvc;
-	int err = -EINVAL;
+	int retval = -EINVAL;
 	int i;
+	struct ov8810_sensor *sensor = s->priv;
+	struct i2c_client *client = sensor->i2c_client;
+	struct vcontrol *lvc;
+	struct ov8810_flash_params flash_params;
+	struct ov8810_sensor_regif sensor_reg;
 
 	i = find_vctrl(vc->id);
 	if (i < 0)
 		return -EINVAL;
+
 	lvc = &video_control[i];
 
 	switch (vc->id) {
 	case V4L2_CID_EXPOSURE:
-		err = ov8810_set_exposure_time(vc->value, s, lvc,
+		retval = ov8810_set_exposure_time(vc->value, s, lvc,
 			sensor->isize);
 		break;
 	case V4L2_CID_GAIN:
-		err = ov8810_set_gain(vc->value, s, lvc);
+		retval = ov8810_set_gain(vc->value, s, lvc);
 		break;
-	case V4L2_CID_PRIVATE_S_PARAMS:
-		err = ov8810_param_handler(vc->value, s);
+	case V4L2_CID_PRIVATE_COLOR_BAR:
+		retval = ov8810_set_color_bar_mode(vc->value, s, lvc);
 		break;
-	case V4L2_CID_PRIVATE_G_PARAMS:
-		/* Not yet supported. */
+	case V4L2_CID_PRIVATE_FLASH_NEXT_FRAME:
+		if (copy_from_user(&flash_params,
+				(struct ov8810_flash_params *)vc->value,
+				sizeof(struct ov8810_flash_params)) == 0) {
+			retval = ov8810_set_flash_next_frame(&flash_params,
+				s, lvc);
+		}
+		break;
+	case V4L2_CID_PRIVATE_ORIENTATION:
+		retval = ov8810_set_orientation(vc->value, s, lvc);
+		break;
+	case V4L2_CID_PRIVATE_LENS_CORRECTION:
+		retval = ov8810_set_lens_correction(vc->value, s, lvc,
+			sensor->isize);
+		break;
+	case V4L2_CID_PRIVATE_SHUTTER_PARAMS:
+		retval = copy_from_user(&(sensor->shutter),
+				(struct ov8810_shutter_params *)vc->value,
+				sizeof(struct ov8810_shutter_params));
+		DPRINTK_OV8810("SHUTTER_PARAMS IOCTL write-" \
+			"exp_time=%d, delay_time=%d, type=%d\n",
+			sensor->shutter.exp_time, sensor->shutter.delay_time,
+			sensor->shutter.type);
+		break;
+	case V4L2_CID_PRIVATE_START_MECH_SHUTTER_CAPTURE:
+		retval = ov8810_start_mech_shutter_capture(
+			&(sensor->shutter), s, lvc);
+		break;
+	case V4L2_CID_PRIVATE_SENSOR_REG_REQ:
+		if ((current_power_state != V4L2_POWER_ON) &&
+			!sensor->resuming) {
+			printk(KERN_ERR "OV8810: Reg Write Err: Power Off\n");
+			return -EINVAL;
+		}
+		if (copy_from_user(&sensor_reg,
+			(struct ov8810_sensor_regif *)vc->value,
+			sizeof(struct ov8810_sensor_regif)) == 0) {
+
+			/* ov8810_write_reg only supports 1-byte writes */
+			DPRINTK_OV8810("SENSOR_REG_REQ IOCTL write-" \
+				"%d: 0x%x=0x%x\n", sensor_reg.len,
+				sensor_reg.addr, sensor_reg.val);
+			if (sensor_reg.len == 1) {
+				retval = ov8810_write_reg(client,
+					sensor_reg.addr, sensor_reg.val);
+			} else if (sensor_reg.len == 2) {
+				retval = ov8810_write_reg(client,
+					sensor_reg.addr,
+					(sensor_reg.val & 0xff00) >> 8);
+				retval |= ov8810_write_reg(client,
+					sensor_reg.addr + 1,
+					sensor_reg.val & 0xff);
+			} else if (sensor_reg.len == 4) {
+				retval = ov8810_write_reg(client,
+					sensor_reg.addr,
+					(sensor_reg.val & 0xff000000) >> 24);
+				retval |= ov8810_write_reg(client,
+					sensor_reg.addr + 1,
+					(sensor_reg.val & 0xff0000) >> 16);
+				retval |= ov8810_write_reg(client,
+					sensor_reg.addr + 2,
+					(sensor_reg.val & 0xff00) >> 8);
+				retval |= ov8810_write_reg(client,
+					sensor_reg.addr + 3,
+					sensor_reg.val & 0xff);
+			} else {
+				printk(KERN_ERR "OV8810: Error: " \
+					"SENSOR_REG_REQ IOCTL " \
+					"length must = 1, 2, or 4\n");
+			}
+		}
 		break;
 	}
-	return err;
+	if (!retval)
+		lvc->current_value = vc->value;
+	return retval;
 }
 
 /*
@@ -2532,7 +2149,6 @@ static int ioctl_s_parm(struct v4l2_int_device *s,
 {
 	int rval = 0;
 	struct ov8810_sensor *sensor = s->priv;
-	struct i2c_client *client = sensor->i2c_client;
 	struct v4l2_fract *timeperframe = &a->parm.capture.timeperframe;
 	struct v4l2_fract timeperframe_old;
 	int desired_fps;
@@ -2542,7 +2158,7 @@ static int ioctl_s_parm(struct v4l2_int_device *s,
 	desired_fps = timeperframe->denominator / timeperframe->numerator;
 	if ((desired_fps < OV8810_MIN_FPS) || (desired_fps > OV8810_MAX_FPS)) {
 		sensor->timeperframe = timeperframe_old;
-		dev_err(&client->dev, "Error setting FPS=%d/%d, " \
+		printk(KERN_ERR "OV8810: Error setting FPS=%d/%d, " \
 			"FPS must be between %d & %d,",
 			timeperframe->denominator, timeperframe->numerator,
 			OV8810_MIN_FPS, OV8810_MAX_FPS);
@@ -2589,25 +2205,27 @@ static int ioctl_g_priv(struct v4l2_int_device *s, void *p)
 
 	rval = ioctl_g_priv(s, &hw_config);
 	if (rval) {
-		dev_err(&c->dev, "Unable to get hw params\n");
-		return rval;
-	}
-
-	rval = sensor->pdata->power_set(sensor->dev, on);
-	if (rval < 0) {
-		dev_err(&c->dev, "Unable to set the power state: "
-			OV8810_DRIVER_NAME " sensor\n");
-		isp_set_xclk(0, OV8810_USE_XCLKA);
+		printk(KERN_ERR "OV8810: Unable to get hw params\n");
 		return rval;
 	}
 
 	if (on == V4L2_POWER_ON) {
-		/* set streaming off, standby */
-		ov8810_write_reg(c, OV8810_IMAGE_SYSTEM, 0x00);
-	} else {
+		isp_set_xclk(sensor->freq.xclk, OV8810_USE_XCLKA);
+	} else if (on == V4L2_POWER_OFF) {
+		isp_set_xclk(0, OV8810_USE_XCLKA);
 		sensor->streaming = false;
 		/* release resource lock */
 		sensor->pdata->lock_cpufreq(CPU_CLK_UNLOCK);
+	} else {
+		sensor->streaming = false;
+	}
+
+	rval = sensor->pdata->power_set(sensor->dev, c, on);
+	if (rval < 0) {
+		printk(KERN_ERR "OV8810: Unable to set the power state: "
+			OV8810_DRIVER_NAME " sensor\n");
+		isp_set_xclk(0, OV8810_USE_XCLKA);
+		return rval;
 	}
 
 	if ((current_power_state == V4L2_POWER_STANDBY) &&
@@ -2621,7 +2239,7 @@ static int ioctl_g_priv(struct v4l2_int_device *s, void *p)
 
 		rval = ov8810_detect(s);
 		if (rval < 0) {
-			dev_err(&c->dev, "Unable to detect "
+			printk(KERN_ERR "OV8810: Unable to detect "
 					OV8810_DRIVER_NAME " sensor\n");
 			sensor->state = SENSOR_NOT_DETECTED;
 			return rval;
@@ -2668,12 +2286,11 @@ static int ioctl_dev_exit(struct v4l2_int_device *s)
 static int ioctl_dev_init(struct v4l2_int_device *s)
 {
 	struct ov8810_sensor *sensor = s->priv;
-	struct i2c_client *c = sensor->i2c_client;
 	int err;
 
 	err = ov8810_detect(s);
 	if (err < 0) {
-		dev_err(&c->dev, "Unable to detect " OV8810_DRIVER_NAME
+		printk(KERN_ERR "OV8810: Unable to detect " OV8810_DRIVER_NAME
 			" sensor\n");
 		return err;
 	}
@@ -2738,22 +2355,22 @@ static int ioctl_enum_framesizes(struct v4l2_int_device *s,
 }
 
 const struct v4l2_fract ov8810_frameintervals[] = {
-	{ .numerator = 3, .denominator = 12 },  /* 0 */
-	{ .numerator = 3, .denominator = 15 },  /* 1 */
-	{ .numerator = 3, .denominator = 18 },  /* 2 */
-	{ .numerator = 3, .denominator = 21 },  /* 3 */
-	{ .numerator = 3, .denominator = 24 },  /* 4 - SIZE_8M max fps */
-	{ .numerator = 1, .denominator = 10 },  /* 5 */
-	{ .numerator = 1, .denominator = 15 },  /* 6 */
-	{ .numerator = 1, .denominator = 20 },  /* 7 */
-	{ .numerator = 1, .denominator = 21 },  /* 8 */
-	{ .numerator = 1, .denominator = 24 },  /* 9 */
-	{ .numerator = 1, .denominator = 25 },  /* 10 */
-	{ .numerator = 1, .denominator = 26 },  /* 11 */
-	{ .numerator = 1, .denominator = 28 },  /* 12 - SIZE_2M max fps */
-	{ .numerator = 1, .denominator = 30 },  /* 13 - SIZE_1_5M &
-							SIZE_500K max fps*/
-	{ .numerator = 1, .denominator = 116 },  /* 14 - SIZE_125K max fps */
+	{ .numerator = 3, .denominator = 3 },   /* 0 */
+	{ .numerator = 3, .denominator = 6 },   /* 1 */
+	{ .numerator = 3, .denominator = 9 },   /* 2 */
+	{ .numerator = 3, .denominator = 12 },  /* 3 */
+	{ .numerator = 3, .denominator = 15 },  /* 4 */
+	{ .numerator = 3, .denominator = 18 },  /* 5 */
+	{ .numerator = 3, .denominator = 21 },  /* 6 */
+	{ .numerator = 3, .denominator = 24 },  /* 7- SIZE_8M max fps */
+	{ .numerator = 1, .denominator = 10 },  /* 8 */
+	{ .numerator = 1, .denominator = 15 },  /* 9 */
+	{ .numerator = 1, .denominator = 20 },  /* 10 */
+	{ .numerator = 1, .denominator = 21 },  /* 11 - SIZE_2M max fps */
+	{ .numerator = 1, .denominator = 25 },  /* 12 */
+	{ .numerator = 1, .denominator = 26 },  /* 13 - SIZE_1_5M max fps */
+	{ .numerator = 1, .denominator = 30 },  /* 14 - SIZE_500K &
+							SIZE_125K max fps */
 };
 
 static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
@@ -2773,23 +2390,20 @@ static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
 
 	if ((frmi->width == ov8810_sizes[SIZE_8M].width) &&
 			(frmi->height == ov8810_sizes[SIZE_8M].height)) {
-		/* The max framerate supported by SIZE_8M capture is 8 fps
+		/* The max framerate supported by SIZE_8M capture is 7 fps
 		 */
-		if (frmi->index > 4)
+		if (frmi->index > 7)
 			return -EINVAL;
 
 	} else if ((frmi->width == ov8810_sizes[SIZE_2M].width) &&
 			(frmi->height == ov8810_sizes[SIZE_2M].height)) {
-		/* The max framerate supported by SIZE_2M capture 28 fps
+		/* The max framerate supported by SIZE_2M capture 21 fps
 		 */
-		if (frmi->index > 12)
+		if (frmi->index > 11)
 			return -EINVAL;
-	} else if (((frmi->width == ov8810_sizes[SIZE_1_5M].width) &&
-			(frmi->height == ov8810_sizes[SIZE_1_5M].height)) ||
-			((frmi->width == ov8810_sizes[SIZE_500K].width) &&
-			(frmi->height == ov8810_sizes[SIZE_500K].height))) {
-		/* The max framerate supported by SIZE_1_5M
-			& SIZE_500K capture is 30 fps
+	} else if ((frmi->width == ov8810_sizes[SIZE_1_5M].width) &&
+			(frmi->height == ov8810_sizes[SIZE_1_5M].height)) {
+		/* The max framerate supported by SIZE_1_5M capture 26 fps
 		 */
 		if (frmi->index > 13)
 			return -EINVAL;
@@ -2840,6 +2454,14 @@ static struct v4l2_int_ioctl_desc ov8810_ioctl_desc[] = {
 	  (v4l2_int_ioctl_func *)ioctl_g_ctrl},
 	{vidioc_int_s_ctrl_num,
 	  (v4l2_int_ioctl_func *)ioctl_s_ctrl},
+/*
+	{ vidioc_int_g_crop_num,
+	  (v4l2_int_ioctl_func *)ioctl_g_crop},
+	{vidioc_int_s_crop_num,
+	  (v4l2_int_ioctl_func *)ioctl_s_crop},
+	{ vidioc_int_cropcap_num,
+	  (v4l2_int_ioctl_func *)ioctl_cropcap},
+*/
 };
 
 static struct v4l2_int_slave ov8810_slave = {
@@ -2882,7 +2504,7 @@ ov8810_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	sensor->pdata = client->dev.platform_data;
 
 	if (!sensor->pdata) {
-		dev_err(&client->dev, "No platform data?\n");
+		printk(KERN_ERR "OV8810: No platform data?\n");
 		return -ENODEV;
 	}
 
@@ -2961,7 +2583,8 @@ static int __init ov8810sensor_init(void)
 
 	err = i2c_add_driver(&ov8810sensor_i2c_driver);
 	if (err) {
-		printk(KERN_ERR "Failed to register" OV8810_DRIVER_NAME ".\n");
+		printk(KERN_ERR "OV8810: Failed to register" \
+			OV8810_DRIVER_NAME ".\n");
 		return err;
 	}
 	return 0;

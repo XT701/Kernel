@@ -21,7 +21,8 @@
 
 struct ov8810_platform_data {
 	/* Set power state, zero is off, non-zero is on. */
-	int (*power_set)(struct device *dev, enum v4l2_power power);
+	int (*power_set)(struct device *dev, struct i2c_client *i2c_client,\
+				enum v4l2_power power);
 	/* Default registers written after power-on or reset. */
 	const struct ov8810_reg *default_regs;
 	int (*ifparm)(struct v4l2_ifparm *p);
@@ -30,10 +31,7 @@ struct ov8810_platform_data {
 };
 
 #if defined(CONFIG_LEDS_FLASH_RESET)
-/* To be removed ! */
 extern bool bd7885_device_detection(void);
-extern bool bd7885_device_enable(void);
-extern bool bd7885_device_disable(void);
 #endif
 
 #endif /* ifndef OV8810_H */
