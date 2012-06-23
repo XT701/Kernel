@@ -21,8 +21,7 @@
 #include <linux/interrupt.h>
 #include <linux/device.h>
 #include <linux/delay.h>
-#include <linux/videodev2.h>
-#include <plat/isp_user.h>
+#include <mach/oldisp_user.h>
 
 #include "hp3a.h"
 #include "hp3a_common.h"
@@ -153,9 +152,6 @@ int hp3a_config_af(struct hp3a_af_config *config, struct hp3a_fh *fh)
 	int index;
 	int coeff0_index = 6; /* index into isp_af_regs array. */
 	int coeff1_index = 12; /* index into isp_af_regs array. */
-
-	if (g_tc.hw_initialized == 0)
-		return -EINVAL;
 
 	if (config->enable) {
 		/* Install AF callback. */

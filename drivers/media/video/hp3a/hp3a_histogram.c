@@ -118,16 +118,15 @@ static void hp3a_histogram_isr(unsigned long status, isp_vbq_callback_ptr arg1,
 		/* If there is a buffer available then fill it. */
 		hist_buffer = (u32 *)phys_to_virt( \
 			page_to_phys(ibuffer->pages[0]));
-		if (hist_buffer) {
-			omap_writel((omap_readl(ISPHIST_CNT)) | \
-				ISPHIST_CNT_CLR_EN, ISPHIST_CNT);
-			for (i = g_tc.hist_bin_size; i--;) {
-				*hist_buffer = omap_readl(ISPHIST_DATA);
-				++hist_buffer;
-			}
-			omap_writel((omap_readl(ISPHIST_CNT)) \
-				& ~ISPHIST_CNT_CLR_EN, ISPHIST_CNT);
+
+		omap_writel((omap_readl(ISPHIST_CNT)) | \
+			ISPHIST_CNT_CLR_EN, ISPHIST_CNT);
+		for (i = g_tc.hist_bin_size; i--;) {
+			*hist_buffer = omap_readl(ISPHIST_DATA);
+			++hist_buffer;
 		}
+		omap_writel((omap_readl(ISPHIST_CNT)) & ~ISPHIST_CNT_CLR_EN,
+			ISPHIST_CNT);
 	} else {
 		/* There are no buffers availavle so just */
 		/* clear internal histogram memory. */
@@ -168,9 +167,6 @@ int hp3a_config_histogram(struct hp3a_histogram_config *config,
 	unsigned long irqflags = 0;
 	struct hp3a_dev *device = fh->device;
 	int bit_shift = 0;
-
-	if (g_tc.hw_initialized == 0)
-		return -EINVAL;
 
 	if (config->enable) {
 		/* Install HIST_IRQ callback. */

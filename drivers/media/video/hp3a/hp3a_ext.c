@@ -27,19 +27,6 @@
 #include "hp3a_common.h"
 
 /**
- * hp3a_hw_enabled - Notify HW is enabled.
- *
- * No return value.
- **/
-void hp3a_hw_enabled(u8 enable)
-{
-	if (enable)
-		g_tc.hw_initialized = 1;
-	else
-		g_tc.hw_initialized = 0;
-}
-
-/**
  * hp3a_ccdc_done - End of ccdc readout specific 3A tasks.
  *
  * No return value.
@@ -98,6 +85,7 @@ void hp3a_stream_on(void)
 	hp3a_flush_queue_irqsave(&g_tc.ready_stats_queue);
 	hp3a_flush_queue_irqsave(&g_tc.hist_hw_queue);
 	g_tc.raw_cap_sched_count = 0;
+	g_tc.sensor_req_reset_count = 0;
 	g_tc.v4l2_streaming = 1;
 
 	hp3a_enable_histogram();
@@ -115,7 +103,6 @@ void hp3a_stream_off(void)
 	g_tc.v4l2_streaming = 0;
 	g_tc.raw_cap_sched_count = 0;
 	g_tc.update_hardpipe = 0;
-	hp3a_flush_queue_irqsave(&g_tc.sensor_write_queue);
 }
 EXPORT_SYMBOL(hp3a_stream_off);
 

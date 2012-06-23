@@ -220,7 +220,6 @@ static int __init hp3a_drv_init(void)
 
 	/* hp3a global data initialization. */
 	g_tc.initialized = 0;
-	g_tc.hw_initialized = 0;
 	/* Save device params for later use. */
 	g_device = device;
 	/* Returning success. */

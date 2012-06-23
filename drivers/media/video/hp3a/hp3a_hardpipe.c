@@ -28,7 +28,7 @@
  **/
 void hp3a_update_hardpipe(void)
 {
-	if (g_tc.hw_initialized == 1 && g_tc.update_hardpipe == 1 &&
+	if (g_tc.update_hardpipe == 1 &&
 		!(omap_readl(ISPPRV_PCR) & ISPPRV_PCR_BUSY)) {
 		omap_writel(g_tc.hpipe_param.dgain, ISPPRV_WB_DGAIN);
 

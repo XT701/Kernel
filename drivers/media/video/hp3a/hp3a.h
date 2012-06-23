@@ -26,7 +26,6 @@
 /**
  * hp3a framework notification functions.
  **/
-void hp3a_hw_enabled(u8 enable);
 void hp3a_ccdc_done(void);
 void hp3a_frame_done(void);
 void hp3a_stream_on(void);
