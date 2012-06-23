@@ -147,6 +147,10 @@ config MACH_MAPPHONE
         bool "Motorola Android Platform phone"
         depends on ARCH_OMAP3 && ARCH_OMAP34XX
 
+config MACH_SHOLEST
+        bool "Motorola sholes tablet"
+        depends on ARCH_OMAP3 && ARCH_OMAP34XX
+
 config MACH_CM_T35
 	bool "CompuLab CM-T35 module"
 	depends on ARCH_OMAP3 && ARCH_OMAP34XX

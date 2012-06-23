@@ -102,6 +102,9 @@ obj-$(CONFIG_MACH_SHOLES)		+= board-sholes.o \
 # usbnet temporarily disabled
 #					   board-sholes-usbnet.o \
 
+ifeq ($(CONFIG_MACH_SHOLEST),y)
+obj-$(CONFIG_MACH_MAPPHONE)	+= sholest/
+else
 obj-$(CONFIG_MACH_MAPPHONE)             += board-mapphone.o \
                                            board-mapphone-camera.o \
                                            board-mapphone-flash.o \
@@ -117,6 +120,7 @@ obj-$(CONFIG_MACH_MAPPHONE)             += board-mapphone.o \
                                            board-mapphone-modem.o \
                                            board-mapphone-mmcprobe.o \
                                            board-mapphone-usb.o
+endif
 obj-$(CONFIG_MOT_FEAT_MDTV)             += board-mapphone-mdtv.o
 obj-$(CONFIG_EMU_UART_DEBUG)		+= board-mapphone-emu_uart.o
 obj-$(CONFIG_HAVE_TRACE_CLOCK)		+= trace-clock.o

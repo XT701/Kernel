@@ -31,6 +31,7 @@ obj-$(CONFIG_LEDS_WM8350)		+= leds-wm8350.o
 obj-$(CONFIG_LEDS_PWM)			+= leds-pwm.o
 obj-$(CONFIG_LEDS_BD7885)               += leds-bd7885.o
 obj-$(CONFIG_LEDS_BU9847)               += leds-bu9847.o
+obj-$(CONFIG_LEDS_AF_LED)		+= leds-ld-cpcap-afled.o
 
 # LED SPI Drivers
 obj-$(CONFIG_LEDS_DAC124S085)		+= leds-dac124s085.o
@@ -43,6 +44,8 @@ obj-$(CONFIG_LEDS_CPCAP)		+= leds-cpcap-adb.o \
 					   leds-cpcap-kpb.o \
 					   leds-cpcap-mdb.o \
 					   leds-cpcap-rgb.o
+obj-$(CONFIG_LEDS_SHOLEST)		+= leds-ld-cpcap-disp.o \
+					   leds-ld-cpcap-rgb.o
 
 # LED Triggers
 obj-$(CONFIG_LEDS_TRIGGER_TIMER)	+= ledtrig-timer.o

@@ -241,6 +241,18 @@ config LEDS_CPCAP
 	depends on LEDS_CLASS && MFD_CPCAP
 	help
 	  This option enables support for LEDs on CPCAP.
+	  
+config LEDS_SHOLEST
+	tristate "LED Support for Sholes Tablet device"
+	depends on LEDS_CLASS && MFD_CPCAP
+	help
+	  This option enables support for LEDs on Sholes Tablet.
+	  
+config LEDS_AF_LED
+        tristate "LED Support for AF LED operatiion"
+        depends on LEDS_CLASS
+        help
+          This option enables support for LEDs connected to CPCAP.
 
 config LEDS_FLASH_RESET
         tristate "LED Support for FLASH_RESET pin control"
