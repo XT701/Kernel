@@ -2756,7 +2756,11 @@ static int audio_probe(struct platform_device *dev)
 	state.codec_in_stream = NULL;
 
 	enable_tx = 0;
+#ifndef CONFIG_MACH_SHOLEST
 	cpcap_audio_state.cpcap = platform_get_drvdata(dev);
+#else
+	cpcap_audio_state.cpcap = dev->dev.platform_data;
+#endif
 	cpcap_audio_set_platform_config(pdata);
 	cpcap_audio_init(&cpcap_audio_state);
 
