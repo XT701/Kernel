@@ -21,9 +21,16 @@
 #define CPCAP_AUDIO_DRIVER_H
 
 #include <linux/soundcard.h>
-#include <linux/cpcap_audio_platform_data.h>
 #include <linux/spi/cpcap-regbits.h>
 #include <linux/spi/cpcap.h>
+
+enum {
+	CPCAP_AUDIO_MODE_NORMAL,	/* mode of normal audio operation */
+	CPCAP_AUDIO_MODE_DAI,	/* CPCAP_AUDIO is configured for DAI testing */
+	CPCAP_AUDIO_MODE_DAI_DOWNLINK = CPCAP_AUDIO_MODE_DAI,
+	CPCAP_AUDIO_MODE_DAI_UPLINK,
+	CPCAP_AUDIO_MODE_TTY	/* CPCAP_AUDIO is configured for TTY */
+};
 
 enum {
 	CPCAP_AUDIO_CODEC_OFF,	/* codec is powered down */
@@ -173,14 +180,13 @@ enum {
 };
 
 enum {
-	CPCAP_AUDIO_CALL_NONE,	/* Not in a call mode */
-	CPCAP_AUDIO_CALL_26MHZ,	/* Wrigley voice call */
-	CPCAP_AUDIO_CALL_19MHZ	/* Qualcomm voice call */
+	CPCAP_AUDIO_RAT_NONE,	/* Not in a call mode */
+	CPCAP_AUDIO_RAT_UMTS,	/* 3GSM mode */
+	CPCAP_AUDIO_RAT_CDMA	/* In CDMA call mode */
 };
 
 enum {
 	CPCAP_AUDIO_DAI_CONFIG_NORMAL, /*stdac on 1, codec on 0, independent*/
-	CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL, /*as "normal" but use CLKIN1*/
 	CPCAP_AUDIO_DAI_CONFIG_HIFI_DUAL, /*stdac on 1, codec on 0, shared PLL*/
 	CPCAP_AUDIO_DAI_CONFIG_HIFI_DUPLEX_0, /*stdac and codec on 0*/
 	CPCAP_AUDIO_DAI_CONFIG_HIFI_DUPLEX_1, /*stdac and codec on 1*/
@@ -199,6 +205,7 @@ enum {
 
 struct cpcap_audio_state {
 	struct cpcap_device *cpcap;
+	int mode;
 	int codec_mode;
 	int codec_rate;
 	int codec_mute;
@@ -216,17 +223,16 @@ struct cpcap_audio_state {
 	int stdac_primary_balance;
 	int ext_primary_balance;
 	unsigned int output_gain;
-	unsigned int fm_output_gain;
 	int microphone;
-	unsigned int input_gain_l;
-	unsigned int input_gain_r;
+	unsigned int input_gain;
+	int rat_type;
 	int dai_config;
 };
 
 void cpcap_audio_set_audio_state(struct cpcap_audio_state *state);
 
 void cpcap_audio_init(struct cpcap_audio_state *state);
-void cpcap_audio_register_dump(struct cpcap_audio_state *state);
-void cpcap_audio_state_dump(struct cpcap_audio_state *state);
+
+int cpcap_audio_is_cdma_shadow(void);
 
 #endif /* CPCAP_AUDIO_DRIVER_H */

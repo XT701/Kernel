@@ -31,7 +31,6 @@
 
 /********************** McBSP SYSCONFIG bit definitions ********************/
 #define FORCE_IDLE 0x0
-#define NO_IDLE 0x1
 #define SMART_IDLE 0x2
 #define MCBSP_SYSC_IOFF_FOFF 0x0
 #define MCBSP_SYSC_IOFF_FON 0x2	/* Err in TRM ES2.0 ?? */

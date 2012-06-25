@@ -37,13 +37,6 @@
 
 #define CLOCK_TREE_RESET_TIME 1
 
-/*constants for ST delay workaround*/
-#define STM_STDAC_ACTIVATE_RAMP_TIME   1
-#define STM_STDAC_EN_TEST_PRE          0x090C
-#define STM_STDAC_EN_TEST_POST                 0x0000
-#define STM_STDAC_EN_ST_TEST1_PRE      0x2400
-#define STM_STDAC_EN_ST_TEST1_POST     0x0400
-
 #ifdef CPCAP_AUDIO_DEBUG
 #define CPCAP_AUDIO_DEBUG_LOG(args...)  \
 				printk(KERN_DEBUG "CPCAP_AUDIO_DRIVER:" args)
@@ -59,6 +52,7 @@
 
 static struct cpcap_audio_state previous_state_struct = {
 	NULL,
+	CPCAP_AUDIO_MODE_NORMAL,
 	CPCAP_AUDIO_CODEC_OFF,
 	CPCAP_AUDIO_CODEC_RATE_8000_HZ,
 	CPCAP_AUDIO_CODEC_MUTE,
@@ -78,12 +72,9 @@ static struct cpcap_audio_state previous_state_struct = {
 	0,			/* output gain */
 	CPCAP_AUDIO_IN_NONE,
 	0,			/* input_gain */
-	0,			/* input gain */
+	CPCAP_AUDIO_RAT_NONE,
 	CPCAP_AUDIO_DAI_CONFIG_NORMAL
 };
-
-/* pointer to platform description data from device tree*/
-static struct cpcap_audio_pdata *platform_config;
 
 /* Define regulator to turn on the audio portion of cpcap */
 struct regulator *audio_reg;
@@ -91,9 +82,16 @@ struct regulator *audio_reg;
 /*is headset mic driver present on GPIO4?*/
 static inline int cpcap_audio_hw_has_hs_driver(void)
 {
-	if (cpcap_audio_has_mic3())
+	if (cpcap_audio_is_cdma_shadow())
 		return 0;
 	return 1;
+}
+
+static inline int cpcap_audio_hw_has_mic3_switch(void)
+{
+	if (cpcap_audio_is_cdma_shadow())
+		return 1;
+	return 0;
 }
 
 static inline int needs_cpcap_mic1(int microphone)
@@ -141,10 +139,9 @@ static inline int is_codec_changed(struct cpcap_audio_state *state,
 {
 	if (state->codec_mode != prev_state->codec_mode ||
 		state->codec_rate != prev_state->codec_rate ||
+		state->rat_type != prev_state->rat_type ||
 		state->microphone != prev_state->microphone ||
-		state->dai_config != prev_state->dai_config ||
-		state->codec_primary_speaker !=
-				prev_state->codec_primary_speaker)
+		state->dai_config != prev_state->dai_config)
 		return 1;
 
 	return 0;
@@ -154,6 +151,7 @@ static inline int is_stdac_changed(struct cpcap_audio_state *state,
 					struct cpcap_audio_state *prev_state)
 {
 	if (state->stdac_mode != prev_state->stdac_mode ||
+		state->rat_type != prev_state->rat_type ||
 		state->stdac_rate != prev_state->stdac_rate ||
 		state->dai_config != prev_state->dai_config)
 		return 1;
@@ -244,37 +242,47 @@ static inline int is_output_changed(struct cpcap_audio_state *state,
 }
 
 
-void cpcap_audio_state_dump(struct cpcap_audio_state *state)
+static void
+audioic_state_dump
+(
+	struct cpcap_audio_state *state
+)
 {
-	printk(KERN_DEBUG "---------Audio Driver State---------\n"
-		"   codec_mode = %d\n   codec_rate = %d\n"
-		"   codec_mute = %d\n   stdac_mode = %d\n"
-		"   stdac_rate = %d\n   stdac_mute = %d\n"
-		"analog_source = %d\n"
-		"   codec_primary_speaker = %d\n"
-		"   stdac_primary_speaker = %d\n"
-		"     ext_primary_speaker = %d\n"
-		" codec_secondary_speaker = %d\n"
-		" stdac_secondary_speaker = %d\n"
-		" ext_secondary_speaker   = %d\n"
-		" codec_primary_balance   = %d\n"
-		" stdac_primary_balance   = %d\n"
-		" ext_primary_balance     = %d\n"
-		" output_gain             = %d\n"
-		" fm_output_gain          = %d\n"
-		" microphone              = %d\n"
-		" input_gain_l            = %d\n"
-		" input_gain_r            = %d\n"
-		" dai_config              = %d\n",
-	state->codec_mode, state->codec_rate, state->codec_mute,
-	state->stdac_mode, state->stdac_rate, state->stdac_mute,
-	state->analog_source, state->codec_primary_speaker,
-	state->stdac_primary_speaker, state->ext_primary_speaker,
-	state->codec_secondary_speaker, state->stdac_secondary_speaker,
-	state->ext_secondary_speaker, state->codec_primary_balance,
-	state->stdac_primary_balance, state->ext_primary_balance,
-	state->output_gain, state->fm_output_gain, state->microphone,
-	state->input_gain_l, state->input_gain_r, state->dai_config);
+	CPCAP_AUDIO_DEBUG_LOG("***************************************\n");
+	CPCAP_AUDIO_DEBUG_LOG("state->mode = %d\n",  state->mode);
+	CPCAP_AUDIO_DEBUG_LOG("state->codec_mode = %d\n", state->codec_mode);
+	CPCAP_AUDIO_DEBUG_LOG("state->codec_rate = %d\n", state->codec_rate);
+	CPCAP_AUDIO_DEBUG_LOG("state->codec_mute = %d\n", state->codec_mute);
+	CPCAP_AUDIO_DEBUG_LOG("state->stdac_mode = %d\n", state->stdac_mode);
+	CPCAP_AUDIO_DEBUG_LOG("state->stdac_rate = %d\n", state->stdac_rate);
+	CPCAP_AUDIO_DEBUG_LOG("state->stdac_mute = %d\n", state->stdac_mute);
+	CPCAP_AUDIO_DEBUG_LOG("state->analog_source = %d\n",
+						state->analog_source);
+	CPCAP_AUDIO_DEBUG_LOG("state->codec_primary_speaker = %d\n",
+						state->codec_primary_speaker);
+	CPCAP_AUDIO_DEBUG_LOG("state->stdac_primary_speaker = %d\n",
+						state->stdac_primary_speaker);
+	CPCAP_AUDIO_DEBUG_LOG("state->ext_primary_speaker = %d\n",
+						state->ext_primary_speaker);
+	CPCAP_AUDIO_DEBUG_LOG("state->codec_secondary_speaker = %d\n",
+						state->codec_secondary_speaker);
+	CPCAP_AUDIO_DEBUG_LOG("state->stdac_secondary_speaker = %d\n",
+						state->stdac_secondary_speaker);
+	CPCAP_AUDIO_DEBUG_LOG("state->ext_secondary_speaker   = %d\n",
+						state->ext_secondary_speaker);
+	CPCAP_AUDIO_DEBUG_LOG("state->stdac_primary_balance   = %d\n",
+						state->stdac_primary_balance);
+	CPCAP_AUDIO_DEBUG_LOG("state->ext_primary_balance     = %d\n",
+						state->ext_primary_balance);
+	CPCAP_AUDIO_DEBUG_LOG("state->output_gain             = %d\n",
+						state->output_gain);
+	CPCAP_AUDIO_DEBUG_LOG("state->microphone              = %d\n",
+						state->microphone);
+	CPCAP_AUDIO_DEBUG_LOG("state->input_gain              = %d\n",
+						state->input_gain);
+	CPCAP_AUDIO_DEBUG_LOG("state->rat_type                = %d\n",
+						state->rat_type);
+	CPCAP_AUDIO_DEBUG_LOG("***************************************\n");
 }
 
 /* this is only true for audio registers, but those are the only ones we use */
@@ -323,14 +331,7 @@ static unsigned short int cpcap_audio_get_codec_output_amp_switches(
 		break;
 
 	case CPCAP_AUDIO_OUT_LOUDSPEAKER:
-		if (cpcap_audio_has_stereo_loudspeaker())	{
-			if (balance != CPCAP_AUDIO_BALANCE_L_ONLY)
-				value |= CPCAP_BIT_A2_LDSP_R_CDC_SW;
-			if (balance != CPCAP_AUDIO_BALANCE_R_ONLY)
-				value |= CPCAP_BIT_A2_LDSP_L_CDC_SW;
-		} else {
-			value |= CPCAP_BIT_A2_LDSP_L_CDC_SW;
-		}
+		value |= CPCAP_BIT_A2_LDSP_L_CDC_SW;
 		break;
 
 	case CPCAP_AUDIO_OUT_MONO_HEADSET:
@@ -380,16 +381,8 @@ static unsigned short int cpcap_audio_get_stdac_output_amp_switches(
 		break;
 
 	case CPCAP_AUDIO_OUT_LOUDSPEAKER:
-		if (cpcap_audio_has_stereo_loudspeaker())	{
-			if (balance != CPCAP_AUDIO_BALANCE_L_ONLY)
-				value |= CPCAP_BIT_A2_LDSP_R_DAC_SW;
-			if (balance != CPCAP_AUDIO_BALANCE_R_ONLY)
-				value |= CPCAP_BIT_A2_LDSP_L_DAC_SW;
-		} else {
-			value |= CPCAP_BIT_A2_LDSP_L_DAC_SW |
-					CPCAP_BIT_MONO_DAC0 |
-					CPCAP_BIT_MONO_DAC1;
-		}
+		value |= CPCAP_BIT_A2_LDSP_L_DAC_SW | CPCAP_BIT_MONO_DAC0 |
+			CPCAP_BIT_MONO_DAC1;
 		break;
 
 	case CPCAP_AUDIO_OUT_LINEOUT:
@@ -430,17 +423,7 @@ static unsigned short int cpcap_audio_get_ext_output_amp_switches(
 		break;
 
 	case CPCAP_AUDIO_OUT_LOUDSPEAKER:
-		if (cpcap_audio_has_stereo_loudspeaker())	{
-			if (balance != CPCAP_AUDIO_BALANCE_L_ONLY)
-				value |= CPCAP_BIT_A2_LDSP_R_EXT_SW
-					| CPCAP_BIT_PGA_EXT_R_EN;
-			if (balance != CPCAP_AUDIO_BALANCE_R_ONLY)
-				value |= CPCAP_BIT_A2_LDSP_L_EXT_SW
-					| CPCAP_BIT_PGA_EXT_L_EN;
-		} else {
-			value = CPCAP_BIT_A2_LDSP_L_EXT_SW |
-					CPCAP_BIT_PGA_EXT_L_EN;
-		}
+		value = CPCAP_BIT_A2_LDSP_L_EXT_SW | CPCAP_BIT_PGA_EXT_L_EN;
 		break;
 
 	case CPCAP_AUDIO_OUT_LINEOUT:
@@ -543,14 +526,7 @@ static bool cpcap_audio_set_bits_for_speaker(int speaker, int balance,
 		break;
 
 	case CPCAP_AUDIO_OUT_LOUDSPEAKER:
-		if (cpcap_audio_has_stereo_loudspeaker()) {
-			if (balance != CPCAP_AUDIO_BALANCE_R_ONLY)
-				(*message) |= CPCAP_BIT_A2_LDSP_L_EN;
-			if (balance != CPCAP_AUDIO_BALANCE_L_ONLY)
-				(*message) |= CPCAP_BIT_A2_LDSP_R_EN;
-		} else {
-			(*message) |= CPCAP_BIT_A2_LDSP_L_EN;
-		}
+		(*message) |= CPCAP_BIT_A2_LDSP_L_EN;
 		break;
 
 	case CPCAP_AUDIO_OUT_LINEOUT:
@@ -571,26 +547,39 @@ static void cpcap_audio_configure_aud_mute(struct cpcap_audio_state *state,
 				struct cpcap_audio_state *prev_state)
 {
 	struct cpcap_regacc reg_changes = { 0 };
+	unsigned short int value1 = 0, value2 = 0;
 
 	if (state->codec_mute != prev_state->codec_mute) {
-		reg_changes.mask = CPCAP_BIT_CDC_SW;
+		value1 = cpcap_audio_get_codec_output_amp_switches(
+				prev_state->codec_primary_speaker,
+				prev_state->codec_primary_balance);
+
+		value2 = cpcap_audio_get_codec_output_amp_switches(
+				prev_state->codec_secondary_speaker,
+				prev_state->codec_primary_balance);
+
+		reg_changes.mask = value1 | value2 | CPCAP_BIT_CDC_SW;
 
 		if (state->codec_mute == CPCAP_AUDIO_CODEC_UNMUTE)
-			reg_changes.value = CPCAP_BIT_CDC_SW;
-		else
-			reg_changes.value = 0;
+			reg_changes.value = reg_changes.mask;
 
 		logged_cpcap_write(state->cpcap, CPCAP_REG_RXCOA,
-				reg_changes.value, reg_changes.mask);
+					reg_changes.value, reg_changes.mask);
 	}
 
 	if (state->stdac_mute != prev_state->stdac_mute) {
-		reg_changes.mask = CPCAP_BIT_ST_DAC_SW;
+		value1 = cpcap_audio_get_stdac_output_amp_switches(
+				prev_state->stdac_primary_speaker,
+				prev_state->stdac_primary_balance);
+
+		value2 = cpcap_audio_get_stdac_output_amp_switches(
+				prev_state->stdac_secondary_speaker,
+				prev_state->stdac_primary_balance);
+
+		reg_changes.mask = value1 | value2 | CPCAP_BIT_ST_DAC_SW;
 
 		if (state->stdac_mute == CPCAP_AUDIO_STDAC_UNMUTE)
-			reg_changes.value = CPCAP_BIT_ST_DAC_SW;
-		else
-			reg_changes.value = 0;
+			reg_changes.value = reg_changes.mask;
 
 		logged_cpcap_write(state->cpcap, CPCAP_REG_RXSDOA,
 					reg_changes.value, reg_changes.mask);
@@ -612,8 +601,7 @@ static void cpcap_audio_configure_codec(struct cpcap_audio_state *state,
 		struct cpcap_regacc codec_changes = { 0 };
 		int codec_freq_config = 0;
 
-		if (state->dai_config == CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL &&
-				cpcap_audio_has_19mhz_bp())
+		if (state->rat_type == CPCAP_AUDIO_RAT_CDMA)
 			codec_freq_config = (CPCAP_BIT_CDC_CLK0
 					| CPCAP_BIT_CDC_CLK1) ; /* 19.2Mhz */
 		else
@@ -638,20 +626,11 @@ static void cpcap_audio_configure_codec(struct cpcap_audio_state *state,
 		switch (state->codec_mode) {
 		case CPCAP_AUDIO_CODEC_LOOPBACK:
 		case CPCAP_AUDIO_CODEC_ON:
-			/*@TODO: higher-level driver could stand
-			 * to be smarter about speaker selection
-			 * instead of second-guessing here
-			 */
 			if (state->codec_primary_speaker !=
 					CPCAP_AUDIO_OUT_NONE &&
-				state->codec_primary_speaker !=
-					 CPCAP_AUDIO_OUT_BT_MONO &&
-				(state->dai_config ==
-					CPCAP_AUDIO_DAI_CONFIG_NORMAL ||
 				state->dai_config ==
-					CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL)) {
-				codec_changes.value |= CPCAP_BIT_CDC_EN_RX |
-					CPCAP_BIT_AUDOHPF_0 | CPCAP_BIT_AUDOHPF_1;
+					CPCAP_AUDIO_DAI_CONFIG_NORMAL) {
+				codec_changes.value |= CPCAP_BIT_CDC_EN_RX;
 			}
 
 			if (needs_cpcap_mic1(state->microphone))
@@ -683,30 +662,25 @@ static void cpcap_audio_configure_codec(struct cpcap_audio_state *state,
 			break;
 		}
 
+		/* Multimedia uses CLK_IN0, incall uses CLK_IN1 */
+		if (state->rat_type != CPCAP_AUDIO_RAT_NONE)
+			cdai_changes.value |= CPCAP_BIT_CLK_IN_SEL;
+
 		/* Bus bus config: Codec is always master*/
 		cdai_changes.value |= CPCAP_BIT_CDC_DIG_AUD_FS0;
 
-		if (state->dai_config == CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL) {
-			cdai_changes.value |= CPCAP_BIT_CLK_IN_SEL |
-					CPCAP_BIT_CDC_PLL_SEL;
-			if (cpcap_audio_has_i2s_bp() &&
-				state->codec_primary_speaker !=
-				 CPCAP_AUDIO_OUT_BT_MONO) {
-				/* Qualcomm BP requires I2S mode
-				 *  if not Bluetooth*/
-				cdai_changes.value |=
-						CPCAP_BIT_CDC_DIG_AUD_FS1 |
-						CPCAP_BIT_CLK_INV;
-			} else  {
-				/* QC BT and all Wrigley
-				 * requires network mode */
-				cdai_changes.value |=
-						CPCAP_BIT_MIC2_TIMESLOT0;
-			}
+		/*Codec uses independent PLL in normal operation*/
+		if (state->dai_config == CPCAP_AUDIO_DAI_CONFIG_NORMAL)
+			cdai_changes.value |= CPCAP_BIT_CDC_PLL_SEL;
+
+		if (state->rat_type == CPCAP_AUDIO_RAT_CDMA) {
+			/* CDMA BP requires I2S mode */
+			cdai_changes.value |= CPCAP_BIT_CDC_DIG_AUD_FS1 |
+							CPCAP_BIT_CLK_INV;
+		} else if (state->rat_type == CPCAP_AUDIO_RAT_UMTS) {
+			/* UMTS BP requires network mode */
+			cdai_changes.value |= CPCAP_BIT_MIC2_TIMESLOT0;
 		} else {
-			/*Codec uses independent PLL in normal operation*/
-			if (state->dai_config == CPCAP_AUDIO_DAI_CONFIG_NORMAL)
-				cdai_changes.value |= CPCAP_BIT_CDC_PLL_SEL;
 			if (state->dai_config ==
 					CPCAP_AUDIO_DAI_CONFIG_HIFI_DUPLEX_1) {
 				/* duplex I2S operation on DAI1 (untested) */
@@ -790,8 +764,7 @@ static void cpcap_audio_configure_stdac(struct cpcap_audio_state *state,
 		struct cpcap_regacc stdac_changes = { 0 };
 
 		int stdac_freq_config = 0;
-		if (state->dai_config == CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL &&
-				cpcap_audio_has_19mhz_bp())
+		if (state->rat_type == CPCAP_AUDIO_RAT_CDMA)
 			stdac_freq_config = (CPCAP_BIT_ST_DAC_CLK0
 					| CPCAP_BIT_ST_DAC_CLK1) ; /*19.2Mhz*/
 		else
@@ -828,16 +801,15 @@ static void cpcap_audio_configure_stdac(struct cpcap_audio_state *state,
 			break;
 		}
 
+		if (state->rat_type != CPCAP_AUDIO_RAT_NONE)
+			sdai_changes.value |= CPCAP_BIT_ST_DAC_CLK_IN_SEL;
+
 		if (state->dai_config == CPCAP_AUDIO_DAI_CONFIG_HIFI_DUPLEX_0) {
 			/* when using DAI0, follow the codec configuration:
 			 * 4-slot network, R on slot 0, L on slot 1 */
 			sdai_changes.value |= CPCAP_BIT_ST_DIG_AUD_FS0
 					| CPCAP_BIT_ST_L_TIMESLOT0;
 		} else {
-			if (state->dai_config ==
-					CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL)
-				sdai_changes.value |=
-						CPCAP_BIT_ST_DAC_CLK_IN_SEL;
 			/* -True I2S mode
 			 * -STDAC is Master of Fsync Bclk
 			 * -STDAC uses DAI1 */
@@ -872,25 +844,8 @@ static void cpcap_audio_configure_stdac(struct cpcap_audio_state *state,
 		stdac_changes.mask = stdac_changes.value | prev_stdac_data;
 		prev_stdac_data = stdac_changes.value;
 
-		if ((stdac_changes.value | CPCAP_BIT_ST_DAC_EN) &&
-			(state->cpcap->vendor == CPCAP_VENDOR_ST)) {
-			logged_cpcap_write(state->cpcap, CPCAP_REG_TEST,
-				STM_STDAC_EN_TEST_PRE, 0xFFFF);
-			logged_cpcap_write(state->cpcap, CPCAP_REG_ST_TEST1,
-				STM_STDAC_EN_ST_TEST1_PRE, 0xFFFF);
-		}
-
 		logged_cpcap_write(state->cpcap, CPCAP_REG_SDAC,
 			stdac_changes.value, stdac_changes.mask);
-
-		if ((stdac_changes.value | CPCAP_BIT_ST_DAC_EN) &&
-			(state->cpcap->vendor == CPCAP_VENDOR_ST)) {
-			msleep(STM_STDAC_ACTIVATE_RAMP_TIME);
-			logged_cpcap_write(state->cpcap, CPCAP_REG_ST_TEST1,
-				STM_STDAC_EN_ST_TEST1_POST, 0xFFFF);
-			logged_cpcap_write(state->cpcap, CPCAP_REG_TEST,
-				STM_STDAC_EN_TEST_POST, 0xFFFF);
-		}
 	}
 }
 
@@ -931,12 +886,11 @@ static void cpcap_audio_configure_input_gains(
 	struct cpcap_audio_state *state,
 	struct cpcap_audio_state *previous_state)
 {
-	if (state->input_gain_r != previous_state->input_gain_r ||
-		state->input_gain_l != previous_state->input_gain_l) {
+	if (state->input_gain != previous_state->input_gain) {
 		struct cpcap_regacc reg_changes = { 0 };
+		unsigned int temp_input_gain = state->input_gain & 0x0000001F;
 
-		reg_changes.value = state->input_gain_r & 0x1F;
-		reg_changes.value |= ((state->input_gain_l & 0x1F) << 5);
+		reg_changes.value |= ((temp_input_gain << 5) | temp_input_gain);
 
 		reg_changes.mask = 0x3FF;
 
@@ -949,22 +903,14 @@ static void cpcap_audio_configure_output_gains(
 	struct cpcap_audio_state *state,
 	struct cpcap_audio_state *previous_state)
 {
-	if (state->output_gain != previous_state->output_gain ||
-		state->fm_output_gain != previous_state->fm_output_gain ||
-		state->dai_config != previous_state->dai_config) {
+	if (state->output_gain != previous_state->output_gain) {
 		struct cpcap_regacc reg_changes = { 0 };
 		unsigned int temp_output_gain = state->output_gain & 0x0000000F;
-		unsigned int temp_fm_gain = state->fm_output_gain & 0x0000000F;
 
 		reg_changes.value |=
-		    ((temp_output_gain << 2) | (temp_output_gain << 8));
-		if (state->dai_config == CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL &&
-			cpcap_audio_has_analog_downlink()) {
-			/*ext gets voice gain if we're using analog downlink*/
-			reg_changes.value |= (temp_output_gain << 12);
-		} else {
-			reg_changes.value |= (temp_fm_gain << 12);
-		}
+		    ((temp_output_gain << 2) | (temp_output_gain << 8) |
+		     (temp_output_gain << 12));
+
 		reg_changes.mask = 0xFF3C;
 
 		logged_cpcap_write(state->cpcap, CPCAP_REG_RXVC,
@@ -1027,8 +973,7 @@ static void cpcap_audio_configure_output(
 
 		/* Sleep for 300ms if we are getting into a call to allow the switch to settle
 		 * If we don't do this, it cause a loud pop at the beginning of the call */
-		if (state->dai_config == CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL &&
-			cpcap_audio_has_analog_downlink() &&
+		if (state->rat_type == CPCAP_AUDIO_RAT_CDMA &&
 			state->ext_primary_speaker != CPCAP_AUDIO_OUT_NONE &&
 			previous_state->ext_primary_speaker == CPCAP_AUDIO_OUT_NONE)
 			msleep(300);
@@ -1095,7 +1040,7 @@ static void cpcap_audio_configure_input(
 						CPCAP_BIT_MIC2_PGA_EN;
 			}
 
-			if (cpcap_audio_has_mic3()) {
+			if (cpcap_audio_hw_has_mic3_switch()) {
 				if (needs_cpcap_mic3_switch(
 						state->microphone)) {
 					logged_cpcap_write(state->cpcap,
@@ -1147,7 +1092,7 @@ static void cpcap_audio_configure_power(int power)
 			mdelay(SLEEP_ACTIVATE_POWER);
 	}
 }
-void cpcap_audio_register_dump(struct cpcap_audio_state *state)
+static void cpcap_audio_register_dump(struct cpcap_audio_state *state)
 {
 	unsigned short reg_val[14] = {0};
 	int i = 0;
@@ -1167,13 +1112,11 @@ void cpcap_audio_register_dump(struct cpcap_audio_state *state)
 	cpcap_regacc_read(state->cpcap, CPCAP_REG_RXLL, &reg_val[i++]);
 	cpcap_regacc_read(state->cpcap, CPCAP_REG_A2LA, &reg_val[i++]);
 
-	printk(KERN_DEBUG "--------CPCAP register dump---------");
-	printk(KERN_DEBUG  " 0x200 (512) = %#x\n 0x201 (513) = %#x\n"
-		" 0x202 (514) = %#x\n 0x203 (515) = %#x\n 0x204 (516) = %#x\n"
-		" 0x205 (517) = %#x\n 0x206 (518) = %#x\n 0x207 (519) = %#x\n"
-		" 0x208 (520) = %#x\n 0x209 (521) = %#x\n 0x20A (522) = %#x\n"
-		" 0x20B (523) = %#x\n 0x20C (524) = %#x\n 0x20D (525) = %#x\n",
-		reg_val[0], reg_val[1], reg_val[2], reg_val[3], reg_val[4],
+	printk(KERN_DEBUG  " 0x200 = %x\n 0x201 = %x\n 0x202 = %x\n"
+		" 0x203 = %x\n 0x204 = %x\n 0x205 = %x\n 0x206 = %x\n"
+		" 0x207 = %x\n 0x208 = %x\n 0x209 = %x\n 0x20A = %x\n"
+		" 0x20B = %x\n 0x20C = %x\n 0x20D = %x\n", reg_val[0],
+		reg_val[1], reg_val[2], reg_val[3], reg_val[4],
 		reg_val[5], reg_val[6], reg_val[7], reg_val[8],
 		reg_val[9], reg_val[10], reg_val[11], reg_val[12],
 		reg_val[13]);
@@ -1188,9 +1131,8 @@ void cpcap_audio_set_audio_state(struct cpcap_audio_state *state)
 		state->codec_mode = CPCAP_AUDIO_CODEC_ON;
 
 	if (state->codec_mode == CPCAP_AUDIO_CODEC_OFF ||
-		state->codec_mode == CPCAP_AUDIO_CODEC_CLOCK_ONLY ||
-		(state->dai_config == CPCAP_AUDIO_DAI_CONFIG_VOICE_CALL &&
-		 cpcap_audio_has_analog_downlink()))
+	    state->codec_mode == CPCAP_AUDIO_CODEC_CLOCK_ONLY ||
+		state->rat_type == CPCAP_AUDIO_RAT_CDMA)
 		state->codec_mute = CPCAP_AUDIO_CODEC_MUTE;
 	else
 		state->codec_mute = CPCAP_AUDIO_CODEC_UNMUTE;
@@ -1268,6 +1210,8 @@ void cpcap_audio_set_audio_state(struct cpcap_audio_state *state)
 		cpcap_audio_configure_power(0);
 
 	previous_state_struct = *state;
+
+	cpcap_audio_register_dump(state);
 }
 
 void cpcap_audio_init(struct cpcap_audio_state *state)
@@ -1286,8 +1230,9 @@ void cpcap_audio_init(struct cpcap_audio_state *state)
 	logged_cpcap_write(state->cpcap, CPCAP_REG_RXSDOA, 0, 0x1FFF);
 	logged_cpcap_write(state->cpcap, CPCAP_REG_RXEPOA, 0, 0x7FFF);
 
-	/* Use free running clock for amplifiers */
-	logged_cpcap_write(state->cpcap, CPCAP_REG_A2LA,
+	if (is_cdma_phone())
+		/* Use free running clock for amplifiers */
+		logged_cpcap_write(state->cpcap, CPCAP_REG_A2LA,
 			CPCAP_BIT_A2_FREE_RUN, CPCAP_BIT_A2_FREE_RUN);
 
 	logged_cpcap_write(state->cpcap, CPCAP_REG_GPIO4,
@@ -1299,58 +1244,11 @@ void cpcap_audio_init(struct cpcap_audio_state *state)
 		CPCAP_AUDIO_ERROR_LOG("could not get regulator for audio\n");
 }
 
-void cpcap_audio_set_platform_config(struct cpcap_audio_pdata *pdata)
+int cpcap_audio_is_cdma_shadow(void)
 {
-	platform_config = pdata;
+	/*@TODO FIX ME!
+	  need to discriminate between Shadow and Droid2*/
+	return is_cdma_phone();
 }
 
-int cpcap_audio_has_analog_downlink(void)
-{
-	if (platform_config)
-		return platform_config->analog_downlink;
-	else
-		return 0;
-}
 
-int cpcap_audio_has_independent_bt(void)
-{
-	/*characteristic of QSC6xxx, which also uses analog DL*/
-	if (platform_config)
-		return platform_config->analog_downlink;
-	else
-		return 0;
-}
-
-int cpcap_audio_has_stereo_loudspeaker(void)
-{
-	if (platform_config)
-		return platform_config->stereo_loudspeaker;
-	else
-		return 0;
-}
-
-int cpcap_audio_has_mic3(void)
-{
-	if (platform_config)
-		return platform_config->mic3;
-	else
-		return 0;
-}
-
-int cpcap_audio_has_i2s_bp(void)
-{
-	if (platform_config)
-		return platform_config->i2s_bp;
-	else
-		return 0;
-
-}
-
-int cpcap_audio_has_19mhz_bp(void)
-{
-	/*characteristic of QSC6xxx/MDM6xxx, which also use I2S*/
-	if (platform_config)
-		return platform_config->i2s_bp;
-	else
-		return 0;
-}
