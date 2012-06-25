@@ -45,6 +45,12 @@
 #include "cm-regbits-34xx.h"
 #include "pm.h"
 
+#ifdef CONFIG_MACH_MAPPHONE_OC
+#include <linux/vmalloc.h>
+#include <linux/proc_fs.h>
+#include <asm/uaccess.h>
+#endif
+
 static const struct clkops clkops_noncore_dpll_ops;
 
 static void omap3430es2_clk_ssi_find_idlest(struct clk *clk,
@@ -101,6 +107,11 @@ struct omap_clk {
 			.clk = ck,	\
 		},			\
 	}
+
+#ifdef CONFIG_MACH_MAPPHONE_OC
+#define MPU_CLK		"arm_fck"
+#define BUF_SIZE	PAGE_SIZE
+#endif
 
 #define CK_343X		(1 << 0)
 #define CK_3430ES1	(1 << 1)
@@ -1135,6 +1146,113 @@ void omap2_clk_init_cpufreq_table(struct cpufreq_frequency_table **table)
 
 	*table = &freq_table[0];
 }
+#ifdef CONFIG_MACH_MAPPHONE_OC
+static struct omap_opp *oc_mpu_opps;
+static struct cpufreq_policy *policy;
+static struct clk *mpu_clk;
+
+extern int cpufreq_stats_freq_update(unsigned int cpu, int index, unsigned int freq);
+
+static char *buf;
+
+static int proc_mpu_opps_read(char *buffer, char **buffer_location,
+		off_t offset, int count, int *eof, void *data)
+{
+	int i, ret = 0;
+
+	if (offset > 0)
+		ret = 0;
+	else
+		for(i = MAX_VDD1_OPP; oc_mpu_opps[i].rate; i--)
+		{
+			if(ret >= count)
+				break;
+
+			ret += scnprintf(buffer+ret, count-ret, "mpu_opps[%d] rate=%lu opp_id=%u vsel=%u sr_adjust_vsel=%u\n", i, 
+			oc_mpu_opps[i].rate, oc_mpu_opps[i].opp_id, oc_mpu_opps[i].vsel, oc_mpu_opps[i].sr_adjust_vsel);	
+		}
+
+	return ret;
+}
+
+static int proc_mpu_opps_write(struct file *filp, const char __user *buffer,
+		unsigned long len, void *data)
+{
+	uint index, rate, vsel;
+
+	if(!len || len >= BUF_SIZE)
+		return -ENOSPC;
+
+	if(copy_from_user(buf, buffer, len))
+		return -EFAULT;
+
+	buf[len] = 0;
+
+	if(sscanf(buf, "%d %d %d", &index, &rate, &vsel) == 3)
+	{
+		if (index < 1 || index > MAX_VDD1_OPP)
+		{
+			printk(KERN_INFO "overclock: invalid index\n");
+			return -EFAULT;
+		}
+
+		oc_mpu_opps[index].rate = rate;
+		oc_mpu_opps[index].vsel = vsel;
+		oc_mpu_opps[index].sr_adjust_vsel = vsel;
+
+		freq_table[MAX_VDD1_OPP - index].frequency = rate / 1000;
+
+		if (index == MAX_VDD1_OPP)
+		{
+			policy->max = policy->cpuinfo.max_freq =
+			policy->user_policy.max = rate / 1000;
+		}
+		else if (index == 1)
+		{
+			policy->min = policy->cpuinfo.min_freq =
+			policy->user_policy.min = rate / 1000;
+		}
+			cpufreq_stats_freq_update(0, MAX_VDD1_OPP - index, rate / 1000);
+	}
+	else
+		printk(KERN_INFO "overclock: insufficient parameters for mpu_opps\n");
+
+	return len;
+}
+
+static int __init overclock_init(void)
+{
+	struct proc_dir_entry *proc_entry;
+	int i;
+
+	extern struct omap_opp mapphone_omap3430_mpu_rate_table;
+
+	oc_mpu_opps = &mapphone_omap3430_mpu_rate_table;
+
+	policy = cpufreq_cpu_get(0);
+	mpu_clk = clk_get(NULL, MPU_CLK);
+
+	freq_table[MAX_VDD1_OPP].index = MAX_VDD1_OPP;
+	freq_table[MAX_VDD1_OPP].frequency = CPUFREQ_TABLE_END;
+
+	for(i = 0; freq_table[i].frequency != CPUFREQ_TABLE_END; i++)
+	{}
+
+	for(; i < MAX_VDD1_OPP; i++)
+	{
+		freq_table[i].index = i;
+		freq_table[i].frequency = freq_table[i-1].frequency;
+	}
+
+	buf = (char *)vmalloc(BUF_SIZE);
+
+	proc_mkdir("overclock", NULL);
+	proc_entry = create_proc_read_entry("overclock/mpu_opps", 0644, NULL, proc_mpu_opps_read, NULL);
+	proc_entry->write_proc = proc_mpu_opps_write;
+	return 0;
+}
+arch_initcall(overclock_init);
+#endif
 #endif
 
 static struct clk_functions omap2_clk_functions = {

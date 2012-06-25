@@ -50,6 +50,17 @@ struct cpufreq_stats_attribute {
 	ssize_t(*show) (struct cpufreq_stats *, char *);
 };
 
+int cpufreq_stats_freq_update(unsigned int cpu, int index, unsigned int freq)
+{
+	struct cpufreq_stats *stat;
+	spin_lock(&cpufreq_stats_lock);
+	stat = per_cpu(cpufreq_stats_table, cpu);
+	stat->freq_table[index] = freq;
+	spin_unlock(&cpufreq_stats_lock);
+	return 0;
+}
+EXPORT_SYMBOL(cpufreq_stats_freq_update);
+
 static int cpufreq_stats_update(unsigned int cpu)
 {
 	struct cpufreq_stats *stat;
@@ -222,6 +233,7 @@ static int cpufreq_stats_create_table(struct cpufreq_policy *policy,
 			continue;
 		count++;
 	}
+		count++;
 
 	alloc_size = count * sizeof(int) + count * sizeof(cputime64_t);
 
@@ -247,7 +259,7 @@ static int cpufreq_stats_create_table(struct cpufreq_policy *policy,
 		if (freq_table_get_index(stat, freq) == -1)
 			stat->freq_table[j++] = freq;
 	}
-	stat->state_num = j;
+	stat->state_num = j+1;
 	spin_lock(&cpufreq_stats_lock);
 	stat->last_time = get_jiffies_64();
 	stat->last_index = freq_table_get_index(stat, policy->cur);
