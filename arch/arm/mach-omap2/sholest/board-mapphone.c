@@ -164,6 +164,8 @@ static struct omap_opp mapphone_omap3430_mpu_rate_table[] = {
 	{S550M, VDD1_OPP4, 0x38, 0x0},
 	/*OPP5*/
 	{S720M, VDD1_OPP5, 0x3E, 0x0},
+	/*OPP6*/
+	{S800M, VDD1_OPP5, 0x3E, 0x0},
 };
 
 #define S80M 80000000
