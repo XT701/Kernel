@@ -152,7 +152,7 @@
 
 char *bp_model = "CDMA";
 
-struct omap_opp mapphone_omap3430_mpu_rate_table[] = {
+static struct omap_opp mapphone_omap3430_mpu_rate_table[] = {
 	{0, 0, 0, 0},
 	/*OPP1*/
 	{S125M, VDD1_OPP1, 0x20, 0x0},
