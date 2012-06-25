@@ -26,6 +26,9 @@
 #include <linux/irq.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
+#include <linux/proc_fs.h>
+#include <linux/vmalloc.h>
+#include <asm/uaccess.h>
 #include "qtouch_obp_ts.h"
 #include "qtouch_obp_ts_firmware.h"
 
@@ -71,6 +74,9 @@ static struct miscdevice qts_device = {
 };
 
 #endif
+
+#define BUF_SIZE 16
+static char *buf;
 
 struct qtm_object {
 	struct qtm_obj_entry		entry;
@@ -135,6 +141,11 @@ struct qtouch_ts_data {
 	int verify_calibration;
 #endif
 };
+
+uint16_t eeprom_checksum;
+bool checksumNeedsCorrection = false;
+uint8_t num_touch = 0;
+bool done = false;
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void qtouch_ts_early_suspend(struct early_suspend *handler);
@@ -252,10 +263,40 @@ static int qtouch_set_addr(struct qtouch_ts_data *ts, uint16_t addr)
 	return ret >= 0 ? 0 : ret;
 }
 
+static int qtouch_reset(void)
+{
+	gpio_direction_output(164, 1);
+	msleep(1);
+	gpio_set_value(164, 0);
+	msleep(20);
+	gpio_set_value(164, 1);
+	msleep(45);
+	return 0;
+}
+
 static int qtouch_read(struct qtouch_ts_data *ts, void *buf, int buf_sz)
 {
 	int retries = 10;
 	int ret;
+	
+	if (ts->pdata->multi_touch_cfg.num_touch != num_touch) {
+		done = false;
+	}
+	if (!done && ts->pdata) {
+		done = true;
+		if (num_touch < 2) num_touch = 2;
+			ts->pdata->multi_touch_cfg.num_touch = num_touch;
+		printk(KERN_INFO "qtouch_num: num_touch set to %u \n",ts->pdata->multi_touch_cfg.num_touch);
+		ts->pdata->flags |= QTOUCH_EEPROM_CHECKSUM;
+		eeprom_checksum = ts->eeprom_checksum;
+		ts->eeprom_checksum = 0;
+		ts->checksum_cnt = 0;
+		checksumNeedsCorrection = true;
+	} else if (!done) {
+		printk(KERN_INFO "qtouch_num: ts->pdata is null! \n");
+	}	
+
+
 
 	do {
 		memset(buf, 0, buf_sz);
@@ -498,6 +539,11 @@ static int qtouch_hw_init(struct qtouch_ts_data *ts)
 	int i;
 	int ret;
 	uint16_t adj_addr;
+	
+	if (checksumNeedsCorrection) {
+		ts->eeprom_checksum = eeprom_checksum;
+		checksumNeedsCorrection = false;
+	}
 
 	pr_info("%s: Doing hw init\n", __func__);
 
@@ -2162,6 +2208,36 @@ static void qtouch_ts_late_resume(struct early_suspend *handler)
 }
 #endif
 
+static int proc_qtouch_num_write(struct file *filp, const char __user *buffer,
+		unsigned long len, void *data) {
+	 unsigned int new_num_touch;
+	if (!len || len >= BUF_SIZE)
+		return -ENOSPC;
+	if (copy_from_user(buf, buffer, len))
+		return -EFAULT;
+	buf[len] = 0;
+	if (sscanf(buf, "%u", &new_num_touch) == 1) {
+		if (new_num_touch > 10) new_num_touch = 10;
+		if (new_num_touch < 2) new_num_touch = 2;
+		if (num_touch != new_num_touch) {
+			num_touch = new_num_touch;
+                        qtouch_reset();
+		}
+	} else
+		printk(KERN_INFO "qtouh_num: wrong parameter for num_touch\n");
+	return len;
+}
+
+static int proc_qtouch_num_read(char *buffer, char **buffer_location,
+		off_t offset, int count, int *eof, void *data) {
+	int ret;
+	if (offset > 0)
+		ret = 0;
+	else
+		ret = scnprintf(buffer, count, "%u\n", num_touch);
+	return ret;
+}
+
 /******** init ********/
 static const struct i2c_device_id qtouch_ts_id[] = {
 	{ QTOUCH_TS_NAME, 0 },
@@ -2184,6 +2260,12 @@ static struct i2c_driver qtouch_ts_driver = {
 
 static int __devinit qtouch_ts_init(void)
 {
+	struct proc_dir_entry *proc_entry;
+        buf = (char *)vmalloc(BUF_SIZE);
+        proc_mkdir("qtouch", NULL);
+	proc_entry = create_proc_read_entry("qtouch/num_touch", 0644, NULL, proc_qtouch_num_read, NULL);
+	proc_entry->write_proc = proc_qtouch_num_write;
+	
 	qtouch_ts_wq = create_singlethread_workqueue("qtouch_obp_ts_wq");
 	if (qtouch_ts_wq == NULL) {
 		pr_err("%s: No memory for qtouch_ts_wq\n", __func__);
@@ -2210,6 +2292,9 @@ static void __exit qtouch_ts_exit(void)
 	if (qtouch_ts_cal_wq)
 		destroy_workqueue(qtouch_ts_cal_wq);
 #endif
+	remove_proc_entry("qtouch/num_touch", NULL);
+	remove_proc_entry("qtouch", NULL);
+	vfree(buf);
 }
 
 module_init(qtouch_ts_init);
