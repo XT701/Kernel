@@ -143,6 +143,15 @@ config CPU_FREQ_DEFAULT_GOV_INTERACTIVE
 	  you to get a full dynamic cpu frequency capable system by simply
 	  loading your cpufreq low-level hardware driver, using the
 	  'interactive' governor for latency-sensitive workloads.
+
+config CPU_FREQ_DEFAULT_GOV_INTERACTIVEX
+	bool "interactivex"
+	select CPU_FREQ_GOV_INTERACTIVEX
+	help
+	  Use the CPUFreq governor 'interactivex' as default. This allows
+	  you to get a full dynamic cpu frequency capable system by simply
+	  loading your cpufreq low-level hardware driver, using the
+	  'interactivex' governor for latency-sensitive workloads.
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -228,6 +237,22 @@ config CPU_FREQ_GOV_INTERACTIVE
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called cpufreq_interactive.
+
+	  For details, take a look at linux/Documentation/cpu-freq.
+	  If in doubt, say N.
+
+config CPU_FREQ_GOV_INTERACTIVEX
+	tristate "'interactivex' cpufreq policy governor"
+	help
+	  'interactivex' - This driver adds a dynamic cpufreq policy governor
+	  designed for latency-sensitive workloads.
+
+	  This governor attempts to reduce the latency of clock
+	  increases so that the system is more responsive to
+	  interactivex workloads.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called cpufreq_interactivex.
 
 	  For details, take a look at linux/Documentation/cpu-freq.
 	  If in doubt, say N.
