@@ -617,26 +617,6 @@ static int acm_tiocmset(struct gserial *port, int set, int clear)
 	 */
 	return acm_notify_serial_state(acm);
 }
-
-static int acm_tiocmget(struct gserial *port)
-{
-	struct f_acm            *acm = port_to_acm(port);
-	unsigned int result = 0;
-
-	if (acm->port_handshake_bits & ACM_CTRL_DTR)
-		result |= TIOCM_DTR;
-
-	if (acm->port_handshake_bits & ACM_CTRL_RTS)
-		result |= TIOCM_RTS;
-
-	if (acm->serial_state & TIOCM_CD)
-		result |= TIOCM_CD;
-
-	if (acm->serial_state & TIOCM_RI)
-		result |= TIOCM_RI;
-
-	return result;
-}
 #endif
 
 /* connect == the TTY link is open */
@@ -894,7 +874,6 @@ int __init acm_bind_config(struct usb_configuration *c, u8 port_num)
 
 #ifdef CONFIG_USB_MOT_ANDROID
 	acm->port.tiocmset = acm_tiocmset;
-	acm->port.tiocmget = acm_tiocmget;
 	g_acm_dev = acm;
 #endif
 

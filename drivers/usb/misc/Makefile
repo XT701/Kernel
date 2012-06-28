@@ -25,7 +25,6 @@ obj-$(CONFIG_USB_USS720)	+= uss720.o
 obj-$(CONFIG_USB_SEVSEG)	+= usbsevseg.o
 obj-$(CONFIG_USB_VST)		+= vstusb.o
 
-obj-$(CONFIG_USB_SERIAL_VIATELECOM_CBP)	+= bypass.o
 obj-$(CONFIG_USB_SISUSBVGA)	+= sisusbvga/
 
 ifeq ($(CONFIG_USB_DEBUG),y)

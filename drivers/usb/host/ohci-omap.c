@@ -980,14 +980,13 @@ static int omap_ohci_bus_suspend(struct usb_hcd *hcd)
 	int chix;
 	struct usb_device *childdev;
 	int count = 0;
-	int i = 0;
-	struct ehci_hcd_omap *omap = dev_get_drvdata(hcd->self.controller);
 #endif
 	struct ohci_hcd *ohci = hcd_to_ohci(hcd);
 #if defined(CONFIG_ARCH_OMAP34XX)
 	struct omap_usb_config *config = hcd->self.controller->platform_data;
 #endif
 #ifdef CONFIG_MACH_MAPPHONE
+	printk(KERN_INFO "%s Enter. \n", __func__);
 
 	for (chix = 0; chix < hcd->self.root_hub->maxchild; chix++) {
 		childdev = hcd->self.root_hub->children[chix];
@@ -1032,21 +1031,7 @@ static int omap_ohci_bus_suspend(struct usb_hcd *hcd)
 	clk_disable(clk_get(NULL, "usbtll_ick"));
 
 	clear_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
-#ifdef CONFIG_MACH_MAPPHONE
-	if (ohci_irq_num)
-		enable_irq(ohci_irq_num);
-#endif
 	ohci_to_hcd(ohci)->state = HC_STATE_SUSPENDED;
-
-#ifdef CONFIG_MACH_MAPPHONE
-	/* Call the Platform Suspend for Each port */
-	if (omap) {
-		for (i = 0; i < OMAP_TLL_CHANNEL_COUNT; i++) {
-			if (config->port_data[i].suspend)
-				config->port_data[i].suspend(omap->dev, i, 1);
-		}
-	}
-#endif
 
 	return ret;
 }
@@ -1056,19 +1041,7 @@ static int omap_ohci_bus_resume(struct usb_hcd *hcd)
 	int ret = 0;
 
 #ifdef CONFIG_MACH_MAPPHONE
-	int i = 0;
-	struct omap_usb_config *config = hcd->self.controller->platform_data;
-	struct ehci_hcd_omap *omap = dev_get_drvdata(hcd->self.controller);
-
-	if (ohci_irq_num)
-		disable_irq(ohci_irq_num);
-	/* Call the Platform Resume for Each port */
-	if (omap) {
-		for (i = 0; i < OMAP_TLL_CHANNEL_COUNT; i++) {
-			if (config->port_data[i].suspend)
-				config->port_data[i].suspend(omap->dev, i, 0);
-		}
-	}
+	printk(KERN_INFO "%s Enter. \n", __func__);
 #endif
 	/* the omap usb host auto-idle is not fully functional,
 	 * manually enable/disable usbtll_ick during

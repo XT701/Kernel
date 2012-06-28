@@ -608,7 +608,6 @@ static void omap_stop_ehc(struct ehci_hcd_omap *omap, struct usb_hcd *hcd)
 
 static irqreturn_t usbtll_irq(int irq, void *pdev)
 {
-	unsigned long flags;
 	u32 sysconfig;
 	u32 usbtll_irqstatus;
 	struct ehci_hcd_omap *omap = platform_get_drvdata(
@@ -618,7 +617,6 @@ static irqreturn_t usbtll_irq(int irq, void *pdev)
 	usbtll_irqstatus = ehci_omap_readl(
 				omap->tll_base, OMAP_USBTLL_IRQSTATUS);
 
-	spin_lock_irqsave(&usb_clocks_lock, flags);
 	if (usbtll_irqstatus & 1) {
 		LOG_USBHOST_ACTIVITY(aUsbHostDbg, iUsbHostDbg, 0x30);
 		LOG_USBHOST_ACTIVITY(aUsbHostDbg, iUsbHostDbg, jiffies);
@@ -627,7 +625,6 @@ static irqreturn_t usbtll_irq(int irq, void *pdev)
 				OMAP_USBTLL_IRQSTATUS, usbtll_irqstatus);
 			ehci_omap_writel(omap->tll_base, OMAP_USBTLL_IRQENABLE,
 				 0);
-			spin_unlock_irqrestore(&usb_clocks_lock, flags);
 			return IRQ_HANDLED;
 		}
 #ifdef CONFIG_HAS_WAKELOCK
@@ -663,7 +660,6 @@ static irqreturn_t usbtll_irq(int irq, void *pdev)
 		set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
 		enable_irq(hcd->irq);
 	}
-	spin_unlock_irqrestore(&usb_clocks_lock, flags);
 
 	return IRQ_HANDLED;
 }

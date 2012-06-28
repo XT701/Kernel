@@ -753,6 +753,22 @@ retry:
 }
 
 /*-------------------------------------------------------------------------*/
+#ifdef CONFIG_MACH_MAPPHONE
+void clear_ohci_intr(struct usb_hcd *hcd)
+{
+	struct ohci_hcd		*ohci = hcd_to_ohci(hcd);
+	struct ohci_regs __iomem *regs = ohci->regs;
+	int			ints;
+	int			inte;
+	ints = ohci_readl(ohci, &regs->intrstatus);
+	inte = ohci_readl(ohci, &regs->intrenable);
+	ohci_writel(ohci, ints, &regs->intrstatus);
+	printk(KERN_INFO "USBHOST:%s():ints=0x%x, inte=0x%x\n",
+		__func__, ints, inte);
+	return;
+}
+EXPORT_SYMBOL(clear_ohci_intr);
+#endif
 
 /* an interrupt happens */
 

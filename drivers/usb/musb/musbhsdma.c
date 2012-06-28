@@ -192,10 +192,10 @@ static int dma_channel_program(struct dma_channel *channel,
 	* have multiple DMA channels enabled in the same direction
 	* at the same time.
 	*/
-	if (musb_channel->transmit && controller->rx_active)
-		return false;
-	else if (!musb_channel->transmit && controller->tx_active)
-		return false;
+		if (musb_channel->transmit && controller->rx_active)
+			return false;
+		else if (!musb_channel->transmit && controller->tx_active)
+			return false;
 
 	channel->actual_len = 0;
 	musb_channel->start_addr = dma_addr;

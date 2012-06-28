@@ -210,7 +210,7 @@ struct usb_tt_clear {
  * 0x80 - 0x8F to log ehci_irq
  * jiffies is also logged when bus suspend, resume or remote wakeup occurs
  */
-#define USBHOST_DBG_ARRAY_SIZE 64
+#define USBHOST_DBG_ARRAY_SIZE 4096
 struct USBHOST_DBG_INFO {
 	int iUsbHostDbg;
 	u32 aUsbHostDbg[USBHOST_DBG_ARRAY_SIZE];

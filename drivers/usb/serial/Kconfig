@@ -621,20 +621,10 @@ config USB_SERIAL_DEBUG
 config USB_SERIAL_MOTO_CDMA_FLASH
 	tristate "Motorola CDMA modem flash mode usb driver"
 	---help---
-	  Say Y here if you want to use a Motorola CDMA modem in flash mode
-	  with a USB connector as a modem link.
+	 Say Y here if you want to use a Motorola CDMA modem in flash mode
+	 with a USB connector as a modem link.
 
-	  To compile this driver as a module, choose M here: the
-	  module will be called moto_flashqsc.  If unsure, choose N.
-
-config USB_SERIAL_VIATELECOM_CBP
-	tristate "VIA-Telecom CBP USB driver, for Data, ETS, AT, PC-Voice, LBS-GPS, etc."
-	---help---
-	  Say Y here if you have a USB debugging device used to receive
-	  debugging data from another machine.  The most common of these
-	  devices is the VIA-Telecom CBP device.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called usb-debug.
+	 To compile this driver as a module, choose M here: the
+	 module will be called moto_flashqsc.  If unsure, choose N.
 
 endif # USB_SERIAL

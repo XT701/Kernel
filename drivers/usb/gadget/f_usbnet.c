@@ -324,17 +324,19 @@ static int usb_ether_xmit(struct sk_buff *skb, struct net_device *dev)
 
 static int usb_ether_open(struct net_device *dev)
 {
+	printk(KERN_INFO "%s\n", __func__);
 	return 0;
 }
 
 static int usb_ether_stop(struct net_device *dev)
 {
+	printk(KERN_INFO "%s\n", __func__);
 	return 0;
 }
 
 static struct net_device_stats *usb_ether_get_stats(struct net_device *dev)
 {
-	printk(KERN_DEBUG "%s\n", __func__);
+	printk(KERN_INFO "%s\n", __func__);
 	return &g_usbnet_context->stats;
 }
 
@@ -793,10 +795,12 @@ static void usbnet_disable(struct usb_function *f)
 
 static void usbnet_suspend(struct usb_function *f)
 {
+	printk(KERN_INFO "%s\n", __func__);
 }
 
 static void usbnet_resume(struct usb_function *f)
 {
+	printk(KERN_INFO "%s\n", __func__);
 }
 
 

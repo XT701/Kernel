@@ -113,16 +113,6 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 	int			mask;
 	u32 __iomem		*hostpc_reg = NULL;
 
-	port = HCS_N_PORTS(ehci->hcs_params);
-	while (port--) {
-		u32 __iomem	*reg = &ehci->regs->port_status[port];
-		u32		t1 = ehci_readl(ehci, reg);
-		if (t1 & PORT_RESUME) {
-			LOG_USBHOST_ACTIVITY(aUsbHostDbg, iUsbHostDbg, 0x4D);
-			return -EBUSY;
-		}
-	}
-
 	ehci_dbg(ehci, "suspend root hub\n");
 
 	if (time_before (jiffies, ehci->next_statechange))

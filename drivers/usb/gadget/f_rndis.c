@@ -31,9 +31,6 @@
 
 #include "u_ether.h"
 #include "rndis.h"
-#ifdef CONFIG_USB_MOT_ANDROID
-#include "f_mot_android.h"
-#endif
 
 
 /*
@@ -123,11 +120,7 @@ static unsigned int bitrate(struct usb_gadget *g)
 
 /* interface descriptor: */
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_interface_descriptor rndis_control_intf = {
-#else
 static struct usb_interface_descriptor rndis_control_intf __initdata = {
-#endif
 	.bLength =		sizeof rndis_control_intf,
 	.bDescriptorType =	USB_DT_INTERFACE,
 
@@ -147,11 +140,7 @@ static struct usb_interface_descriptor rndis_control_intf __initdata = {
 	/* .iInterface = DYNAMIC */
 };
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_cdc_header_desc header_desc = {
-#else
 static struct usb_cdc_header_desc header_desc __initdata = {
-#endif
 	.bLength =		sizeof header_desc,
 	.bDescriptorType =	USB_DT_CS_INTERFACE,
 	.bDescriptorSubType =	USB_CDC_HEADER_TYPE,
@@ -159,11 +148,7 @@ static struct usb_cdc_header_desc header_desc __initdata = {
 	.bcdCDC =		cpu_to_le16(0x0110),
 };
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_cdc_call_mgmt_descriptor call_mgmt_descriptor = {
-#else
 static struct usb_cdc_call_mgmt_descriptor call_mgmt_descriptor __initdata = {
-#endif
 	.bLength =		sizeof call_mgmt_descriptor,
 	.bDescriptorType =	USB_DT_CS_INTERFACE,
 	.bDescriptorSubType =	USB_CDC_CALL_MANAGEMENT_TYPE,
@@ -172,11 +157,7 @@ static struct usb_cdc_call_mgmt_descriptor call_mgmt_descriptor __initdata = {
 	.bDataInterface =	0x01,
 };
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_cdc_acm_descriptor acm_descriptor = {
-#else
 static struct usb_cdc_acm_descriptor acm_descriptor __initdata = {
-#endif
 	.bLength =		sizeof acm_descriptor,
 	.bDescriptorType =	USB_DT_CS_INTERFACE,
 	.bDescriptorSubType =	USB_CDC_ACM_TYPE,
@@ -184,11 +165,7 @@ static struct usb_cdc_acm_descriptor acm_descriptor __initdata = {
 	.bmCapabilities =	0x00,
 };
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_cdc_union_desc rndis_union_desc = {
-#else
 static struct usb_cdc_union_desc rndis_union_desc __initdata = {
-#endif
 	.bLength =		sizeof(rndis_union_desc),
 	.bDescriptorType =	USB_DT_CS_INTERFACE,
 	.bDescriptorSubType =	USB_CDC_UNION_TYPE,
@@ -198,11 +175,7 @@ static struct usb_cdc_union_desc rndis_union_desc __initdata = {
 
 /* the data interface has two bulk endpoints */
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_interface_descriptor rndis_data_intf  = {
-#else
 static struct usb_interface_descriptor rndis_data_intf __initdata = {
-#endif
 	.bLength =		sizeof rndis_data_intf,
 	.bDescriptorType =	USB_DT_INTERFACE,
 
@@ -216,11 +189,7 @@ static struct usb_interface_descriptor rndis_data_intf __initdata = {
 
 /* full speed support: */
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_endpoint_descriptor fs_notify_desc = {
-#else
 static struct usb_endpoint_descriptor fs_notify_desc __initdata = {
-#endif
 	.bLength =		USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType =	USB_DT_ENDPOINT,
 
@@ -230,11 +199,7 @@ static struct usb_endpoint_descriptor fs_notify_desc __initdata = {
 	.bInterval =		1 << LOG2_STATUS_INTERVAL_MSEC,
 };
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_endpoint_descriptor fs_in_desc = {
-#else
 static struct usb_endpoint_descriptor fs_in_desc __initdata = {
-#endif
 	.bLength =		USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType =	USB_DT_ENDPOINT,
 
@@ -242,11 +207,7 @@ static struct usb_endpoint_descriptor fs_in_desc __initdata = {
 	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
 };
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_endpoint_descriptor fs_out_desc = {
-#else
 static struct usb_endpoint_descriptor fs_out_desc __initdata = {
-#endif
 	.bLength =		USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType =	USB_DT_ENDPOINT,
 
@@ -254,11 +215,7 @@ static struct usb_endpoint_descriptor fs_out_desc __initdata = {
 	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
 };
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_descriptor_header *eth_fs_function[] = {
-#else
 static struct usb_descriptor_header *eth_fs_function[] __initdata = {
-#endif
 	/* control interface matches ACM, not Ethernet */
 	(struct usb_descriptor_header *) &rndis_control_intf,
 	(struct usb_descriptor_header *) &header_desc,
@@ -275,11 +232,7 @@ static struct usb_descriptor_header *eth_fs_function[] __initdata = {
 
 /* high speed support: */
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_endpoint_descriptor hs_notify_desc = {
-#else
 static struct usb_endpoint_descriptor hs_notify_desc __initdata = {
-#endif
 	.bLength =		USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType =	USB_DT_ENDPOINT,
 
@@ -288,11 +241,7 @@ static struct usb_endpoint_descriptor hs_notify_desc __initdata = {
 	.wMaxPacketSize =	cpu_to_le16(STATUS_BYTECOUNT),
 	.bInterval =		LOG2_STATUS_INTERVAL_MSEC + 4,
 };
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_endpoint_descriptor hs_in_desc = {
-#else
 static struct usb_endpoint_descriptor hs_in_desc __initdata = {
-#endif
 	.bLength =		USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType =	USB_DT_ENDPOINT,
 
@@ -301,11 +250,7 @@ static struct usb_endpoint_descriptor hs_in_desc __initdata = {
 	.wMaxPacketSize =	cpu_to_le16(512),
 };
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_endpoint_descriptor hs_out_desc = {
-#else
 static struct usb_endpoint_descriptor hs_out_desc __initdata = {
-#endif
 	.bLength =		USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType =	USB_DT_ENDPOINT,
 
@@ -314,11 +259,7 @@ static struct usb_endpoint_descriptor hs_out_desc __initdata = {
 	.wMaxPacketSize =	cpu_to_le16(512),
 };
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static struct usb_descriptor_header *eth_hs_function[] = {
-#else
 static struct usb_descriptor_header *eth_hs_function[] __initdata = {
-#endif
 	/* control interface matches ACM, not Ethernet */
 	(struct usb_descriptor_header *) &rndis_control_intf,
 	(struct usb_descriptor_header *) &header_desc,
@@ -464,7 +405,6 @@ rndis_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 	/* composite driver infrastructure handles everything except
 	 * CDC class messages; interface activation uses set_alt().
 	 */
-
 	switch ((ctrl->bRequestType << 8) | ctrl->bRequest) {
 
 	/* RNDIS uses the CDC command encapsulation mechanism to implement
@@ -472,11 +412,8 @@ rndis_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 	 */
 	case ((USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
 			| USB_CDC_SEND_ENCAPSULATED_COMMAND:
-#ifdef CONFIG_USB_MOT_ANDROID
-		if (w_length > req->length || w_value)
-#else
-		if (w_value || w_index != rndis->ctrl_id)
-#endif
+		if (w_length > req->length || w_value
+				|| w_index != rndis->ctrl_id)
 			goto invalid;
 		/* read the request; process it later */
 		value = w_length;
@@ -487,11 +424,7 @@ rndis_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 
 	case ((USB_DIR_IN | USB_TYPE_CLASS | USB_RECIP_INTERFACE) << 8)
 			| USB_CDC_GET_ENCAPSULATED_RESPONSE:
-#ifdef CONFIG_USB_MOT_ANDROID
-		if (w_value)
-#else
 		if (w_value || w_index != rndis->ctrl_id)
-#endif
 			goto invalid;
 		else {
 			u8 *buf;
@@ -596,13 +529,6 @@ static int rndis_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 	} else
 		goto fail;
 
-#ifdef CONFIG_USB_MOT_ANDROID
-	 printk(KERN_INFO
-		"enter rndis_set_alt usb_interface_enum_cb\n");
-
-	usb_interface_enum_cb(RNDIS_TYPE_FLAG);
-#endif
-
 	return 0;
 fail:
 	return -EINVAL;
@@ -660,11 +586,7 @@ static void rndis_close(struct gether *geth)
 
 /* ethernet function driver setup/binding */
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static int
-#else
 static int __init
-#endif
 rndis_bind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct usb_composite_dev *cdev = c->cdev;
@@ -679,11 +601,7 @@ rndis_bind(struct usb_configuration *c, struct usb_function *f)
 	rndis->ctrl_id = status;
 
 	rndis_control_intf.bInterfaceNumber = status;
-#ifdef CONFIG_USB_MOT_ANDROID
-	rndis_union_desc.bMasterInterface0 = 0;
-#else
 	rndis_union_desc.bMasterInterface0 = status;
-#endif
 
 	status = usb_interface_id(c, f);
 	if (status < 0)
@@ -691,11 +609,7 @@ rndis_bind(struct usb_configuration *c, struct usb_function *f)
 	rndis->data_id = status;
 
 	rndis_data_intf.bInterfaceNumber = status;
-#ifdef CONFIG_USB_MOT_ANDROID
-	rndis_union_desc.bSlaveInterface0 = 1;
-#else
 	rndis_union_desc.bSlaveInterface0 = status;
-#endif
 
 	status = -ENODEV;
 
@@ -736,13 +650,10 @@ rndis_bind(struct usb_configuration *c, struct usb_function *f)
 	rndis->notify_req->complete = rndis_response_complete;
 
 	/* copy descriptors, and track endpoint copies */
-#ifdef CONFIG_USB_MOT_ANDROID
-	f->descriptors = eth_fs_function;
-#else
 	f->descriptors = usb_copy_descriptors(eth_fs_function);
 	if (!f->descriptors)
 		goto fail;
-#endif
+
 	rndis->fs.in = usb_find_endpoint(eth_fs_function,
 			f->descriptors, &fs_in_desc);
 	rndis->fs.out = usb_find_endpoint(eth_fs_function,
@@ -871,15 +782,10 @@ static inline bool can_support_rndis(struct usb_configuration *c)
  * Caller must have called @gether_setup().  Caller is also responsible
  * for calling @gether_cleanup() before module unload.
  */
-#ifdef CONFIG_USB_MOT_ANDROID
-int rndis_bind_config(struct usb_configuration *c, u8 ethaddr[ETH_ALEN])
-#else
 int __init rndis_bind_config(struct usb_configuration *c, u8 ethaddr[ETH_ALEN])
-#endif
 {
 	struct f_rndis	*rndis;
 	int		status;
-
 
 	if (!can_support_rndis(c) || !ethaddr)
 		return -EINVAL;
@@ -949,11 +855,7 @@ fail:
 #ifdef CONFIG_USB_ANDROID_RNDIS
 #include "rndis.c"
 
-#ifdef CONFIG_USB_MOT_ANDROID
-static int rndis_probe(struct platform_device *pdev)
-#else
 static int __init rndis_probe(struct platform_device *pdev)
-#endif
 {
 	rndis_pdata = pdev->dev.platform_data;
 	return 0;

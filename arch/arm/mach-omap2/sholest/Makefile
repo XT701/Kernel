@@ -11,5 +11,5 @@ obj-y                                   += board-mapphone.o \
                                            board-mapphone-wifi.o \
                                            board-mapphone-gpio.o \
                                            board-mapphone-modem.o \
-                                           board-mapphone-mmcprobe.o \
-                                           board-mapphone-usb.o
+                                           board-mapphone-mmcprobe.o
+

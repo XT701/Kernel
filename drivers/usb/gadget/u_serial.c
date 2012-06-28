@@ -1007,22 +1007,6 @@ static int gs_tiocmset(struct tty_struct *tty, struct file *file,
 
 	return status;
 }
-
-static int gs_tiocmget(struct tty_struct *tty, struct file *file)
-{
-	struct gs_port  *port = tty->driver_data;
-	int             status = 0;
-	struct gserial  *gser;
-
-	pr_vdebug("gs_tiocmget: ttyGS%d\n", port->port_num);
-	spin_lock_irq(&port->port_lock);
-	gser = port->port_usb;
-	if (gser && gser->tiocmget)
-		status = gser->tiocmget(gser);
-	spin_unlock_irq(&port->port_lock);
-
-	return status;
-}
 #endif
 
 static const struct tty_operations gs_tty_ops = {
@@ -1031,7 +1015,6 @@ static const struct tty_operations gs_tty_ops = {
 	.write =		gs_write,
 #ifdef CONFIG_USB_MOT_ANDROID
 	.tiocmset =             gs_tiocmset,
-	.tiocmget =             gs_tiocmget,
 #endif
 	.put_char =		gs_put_char,
 	.flush_chars =		gs_flush_chars,

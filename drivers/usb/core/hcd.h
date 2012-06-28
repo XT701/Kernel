@@ -555,6 +555,7 @@ extern unsigned long usb_hcds_loaded;
 
 #ifdef CONFIG_MACH_MAPPHONE
 extern void clear_ehci_intr(struct usb_hcd *hcd);
+extern void clear_ohci_intr(struct usb_hcd *hcd);
 #endif
 
 #endif /* __KERNEL__ */

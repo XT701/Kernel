@@ -42,10 +42,7 @@ gadgetfs-objs			:= inode.o
 g_file_storage-objs		:= file_storage.o
 g_printer-objs			:= printer.o
 g_cdc-objs			:= cdc2.o
-g_mot_android-objs              := mot_android.o f_usbnet.o f_adb.o f_mass_storage.o f_mtp.o f_acm.o u_serial.o f_rndis.o u_ether.o
-ifeq ($(CONFIG_USB_SERIAL_VIATELECOM_CBP),y)
-g_mot_android-objs		+= f_via_cpbypass.o
-endif
+g_mot_android-objs              := mot_android.o f_usbnet.o f_adb.o f_mass_storage.o f_mtp.o f_acm.o u_serial.o
 
 obj-$(CONFIG_USB_ZERO)		+= g_zero.o
 obj-$(CONFIG_USB_AUDIO)		+= g_audio.o
@@ -60,5 +57,6 @@ obj-$(CONFIG_USB_ANDROID)	+= android.o
 obj-$(CONFIG_USB_ANDROID_ACM)	+= f_acm.o u_serial.o
 obj-$(CONFIG_USB_ANDROID_ADB)	+= f_adb.o
 obj-$(CONFIG_USB_ANDROID_MASS_STORAGE)	+= f_mass_storage.o
+obj-$(CONFIG_USB_ANDROID_RNDIS)	+= f_rndis.o u_ether.o
 obj-$(CONFIG_USB_MOT_ANDROID)  += g_mot_android.o
 

@@ -611,6 +611,7 @@ int usb_ipc_data_probe(struct usb_interface *intf,
 void usb_ipc_data_disconnect(struct usb_interface *intf)
 {
 #ifdef CONFIG_IPC_USBHOST_DBG
+	int j;
 #ifdef USE_OMAP_SDMA
 	int i, iDma;
 	u32 dma_ch, uDmaRegAddr;
@@ -629,6 +630,34 @@ void usb_ipc_data_disconnect(struct usb_interface *intf)
 	usb_unlink_urb(&usb_ipc_data_param.write_urb);
 
 #ifdef CONFIG_IPC_USBHOST_DBG
+	sIpcDbg.aTll[0] = omap_readl(0x48062010);
+	sIpcDbg.aTll[1] = omap_readl(0x48062014);
+	sIpcDbg.aTll[2] = omap_readl(0x48062018);
+	sIpcDbg.aTll[3] = omap_readl(0x4806201c);
+	sIpcDbg.aTll[4] = omap_readl(0x48062030);
+	sIpcDbg.aTll[5] = omap_readl(0x48062040);
+	sIpcDbg.aTll[6] = omap_readl(0x48062044);
+	sIpcDbg.aTll[7] = omap_readl(0x48062048);
+
+	sIpcDbg.aUhh[0] = omap_readl(0x48064010);
+	sIpcDbg.aUhh[1] = omap_readl(0x48064014);
+	sIpcDbg.aUhh[2] = omap_readl(0x48064040);
+
+	sIpcDbg.aEhci[0] = omap_readl(0x48064810);
+	sIpcDbg.aEhci[1] = omap_readl(0x48064814);
+	sIpcDbg.aEhci[2] = omap_readl(0x48064818);
+	sIpcDbg.aEhci[3] = omap_readl(0x48064854);
+	sIpcDbg.aEhci[4] = omap_readl(0x48064858);
+	sIpcDbg.aEhci[5] = omap_readl(0x4806485c);
+	for (j = 0; j < 8; j++)
+		printk(KERN_INFO "%s():USB TLL register %d:0x%x\n", __func__,
+			 sIpcDbg.aTll[j], sIpcDbg.aTll[j]);
+	for (j = 0; j < 3; j++)
+		printk(KERN_INFO "%s():USB UHH register %d:0x%x\n", __func__,
+			 sIpcDbg.aUhh[j], sIpcDbg.aUhh[j]);
+	for (j = 0; j < 6; j++)
+		printk(KERN_INFO "%s():USB EHCI register %d:0x%x\n", __func__,
+			 sIpcDbg.aEhci[j], sIpcDbg.aEhci[j]);
 #ifdef USE_OMAP_SDMA
 	iDma = 0;
 	sIpcDbg.aDma[iDma++] = omap_readl(0x48056000);
