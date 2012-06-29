@@ -191,11 +191,11 @@ static struct omap_opp mapphone_omap3430_mpu_rate_table[] = {
 	/*OPP5*/
 	{S720M, VDD1_OPP5, 0x3E, 0x0},
 	/*OPP6*/
-	{S800M, VDD1_OPP5, 0x3E, 0x0},
+	{S800M, VDD1_OPP6, 0x40, 0x0},
 };
 
-#define S80M 80000000
-#define S160M 160000000
+#define S80M 83000000
+#define S160M 166000000
 
 static struct omap_opp mapphone_omap3430_l3_rate_table[] = {
 	{0, 0, 0, 0},
@@ -214,11 +214,13 @@ static struct omap_opp mapphone_omap3430_dsp_rate_table[] = {
 	/*OPP2*/
 	{S180M, VDD1_OPP2, 0x27, 0x0},
 	/*OPP3*/
-	{S360M, VDD1_OPP3, 0x32, 0x0},
+	{S260M, VDD1_OPP3, 0x2E, 0x0},
 	/*OPP4*/
-	{S400M, VDD1_OPP4, 0x38, 0x0},
+	{S360M, VDD1_OPP4, 0x32, 0x0},
 	/*OPP5*/
-	{S520M, VDD1_OPP5, 0x3E, 0x0},
+	{S400M, VDD1_OPP5, 0x38, 0x0},
+	/*OPP6*/
+	{S430M, VDD1_OPP6, 0x3E, 0x0},
 };
 
 static struct omap_opp mapphone_omap3630_mpu_rate_table[] = {
