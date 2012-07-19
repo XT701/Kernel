@@ -1950,31 +1950,20 @@ static void __init mapphone_sdrc_init(void)
 
 static void __init mapphone_serial_init(void)
 {
-	int bpwake_strobe_gpio = MAPPHONE_BPWAKE_STROBE_GPIO;
 #ifdef CONFIG_ARM_OF
-	struct device_node *dt_node;
-	const void *dt_prop;
 	int gps_uart_port = 0x01;
 	static char *  uart_flowctl_ctsrts[] ={  "0x40" ,  "0xC0",  "0x40" } ;
 
+    printk(KERN_INFO " Steve : Enter mapphone_serial_init \n"); // by Steve Kim (w21521)
 	omap_serial_ctsrts_init((unsigned char *) uart_flowctl_ctsrts);
 	omap_uart_set_gps_port(gps_uart_port);
-
+    printk(KERN_INFO "mapphone_serial_init : gps_uart_port =%d \n", gps_uart_port);// by Steve Kim (w21521)		
+#endif
+	
 	/* Disable ttyS2 if uart debug is disabled in the device tree.
 	 * This disables the serial console, preventing headset static
 	 * that occured when the kernel wrote to the serial console.
 	 */
-	dt_node = of_find_node_by_path(DT_HIGH_LEVEL_FEATURE);
-	if (NULL != dt_node) {
-		dt_prop = of_get_property(dt_node,
-				DT_HIGH_LEVEL_FEATURE_HEADSET_UART_EN, NULL);
-		if (NULL != dt_prop)
-			if (*(u8 *)dt_prop == 0)
-				mapphone_uart_config.enabled_uarts &= ~(1 << 2);
-
-		of_node_put(dt_node);
-	}
-#endif
 
 	omap_cfg_reg(AA8_34XX_UART1_TX);
 	omap_cfg_reg(Y8_34XX_UART1_RX);
@@ -1984,10 +1973,7 @@ static void __init mapphone_serial_init(void)
 	omap_cfg_reg(AD25_34XX_UART2_RX);
 	omap_cfg_reg(AB25_34XX_UART2_RTS);
 	omap_cfg_reg(AB26_34XX_UART2_CTS);
-	bpwake_strobe_gpio = MAPPHONE_BPWAKE_STROBE_GPIO;
-	if (bpwake_strobe_gpio < 0)
-		bpwake_strobe_gpio = MAPPHONE_BPWAKE_STROBE_GPIO;
-	omap_serial_init(bpwake_strobe_gpio, 0x01);
+	omap_serial_init(MAPPHONE_BPWAKE_STROBE_GPIO, 0x01);
 }
 
 
