@@ -284,8 +284,8 @@ static void AKECS_Report_Value(short *rbuf)
 		input_report_abs(data->input_dev, ABS_THROTTLE, rbuf[3]);
 
 	if (atomic_read(&mv_flag)) {
-		input_report_abs(data->input_dev, ABS_HAT0X, rbuf[9]);
-		input_report_abs(data->input_dev, ABS_HAT0Y, rbuf[10]);
+		input_report_abs(data->input_dev, ABS_HAT0X, 0 - rbuf[10]);
+		input_report_abs(data->input_dev, ABS_HAT0Y, rbuf[9]);
 		input_report_abs(data->input_dev, ABS_BRAKE, rbuf[11]);
 	}
 
